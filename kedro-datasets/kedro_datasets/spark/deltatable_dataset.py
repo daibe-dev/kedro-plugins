@@ -1,21 +1,22 @@
-"""``AbstractDataSet`` implementation to access DeltaTables using
-``delta-spark``
+"""``AbstractDataset`` implementation to access DeltaTables using
+``delta-spark``.
 """
 from pathlib import PurePosixPath
-from typing import Any, Dict, NoReturn
+from typing import Any, NoReturn
 
 from delta.tables import DeltaTable
-from pyspark.sql import SparkSession
+from kedro.io.core import AbstractDataset, DatasetError
 from pyspark.sql.utils import AnalysisException
 
-from kedro_datasets.spark.spark_dataset import _split_filepath, _strip_dbfs_prefix
+from kedro_datasets.spark.spark_dataset import (
+    _get_spark,
+    _split_filepath,
+    _strip_dbfs_prefix,
+)
 
-from .._io import AbstractDataset as AbstractDataSet
-from .._io import DatasetError as DataSetError
 
-
-class DeltaTableDataSet(AbstractDataSet[None, DeltaTable]):
-    """``DeltaTableDataSet`` loads data into DeltaTable objects.
+class DeltaTableDataset(AbstractDataset[None, DeltaTable]):
+    """``DeltaTableDataset`` loads data into DeltaTable objects.
 
     Example usage for the
     `YAML API <https://kedro.readthedocs.io/en/stable/data/\
@@ -24,38 +25,39 @@ class DeltaTableDataSet(AbstractDataSet[None, DeltaTable]):
     .. code-block:: yaml
 
         weather@spark:
-          type: spark.SparkDataSet
+          type: spark.SparkDataset
           filepath: data/02_intermediate/data.parquet
           file_format: "delta"
 
         weather@delta:
-          type: spark.DeltaTableDataSet
+          type: spark.DeltaTableDataset
           filepath: data/02_intermediate/data.parquet
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
+    .. code-block:: pycon
+
+        >>> from delta import DeltaTable
+        >>> from kedro_datasets.spark import DeltaTableDataset, SparkDataset
         >>> from pyspark.sql import SparkSession
-        >>> from pyspark.sql.types import (StructField, StringType,
-        >>>                                IntegerType, StructType)
+        >>> from pyspark.sql.types import StructField, StringType, IntegerType, StructType
         >>>
-        >>> from kedro.extras.datasets.spark import DeltaTableDataSet, SparkDataSet
+        >>> schema = StructType(
+        ...     [StructField("name", StringType(), True), StructField("age", IntegerType(), True)]
+        ... )
         >>>
-        >>> schema = StructType([StructField("name", StringType(), True),
-        >>>                      StructField("age", IntegerType(), True)])
-        >>>
-        >>> data = [('Alex', 31), ('Bob', 12), ('Clarke', 65), ('Dave', 29)]
+        >>> data = [("Alex", 31), ("Bob", 12), ("Clarke", 65), ("Dave", 29)]
         >>>
         >>> spark_df = SparkSession.builder.getOrCreate().createDataFrame(data, schema)
-        >>>
-        >>> data_set = SparkDataSet(filepath="test_data", file_format="delta")
-        >>> data_set.save(spark_df)
-        >>> deltatable_dataset = DeltaTableDataSet(filepath="test_data")
+        >>> filepath = (tmp_path / "test_data").as_posix()
+        >>> dataset = SparkDataset(filepath=filepath, file_format="delta")
+        >>> dataset.save(spark_df)
+        >>> deltatable_dataset = DeltaTableDataset(filepath=filepath)
         >>> delta_table = deltatable_dataset.load()
         >>>
-        >>> delta_table.update()
+        >>> assert isinstance(delta_table, DeltaTable)
     """
 
     # this dataset cannot be used with ``ParallelRunner``,
@@ -64,13 +66,13 @@ class DeltaTableDataSet(AbstractDataSet[None, DeltaTable]):
     # using ``ThreadRunner`` instead
     _SINGLE_PROCESS = True
 
-    def __init__(self, filepath: str, metadata: Dict[str, Any] = None) -> None:
-        """Creates a new instance of ``DeltaTableDataSet``.
+    def __init__(self, *, filepath: str, metadata: dict[str, Any] = None) -> None:
+        """Creates a new instance of ``DeltaTableDataset``.
 
         Args:
             filepath: Filepath in POSIX format to a Spark dataframe. When using Databricks
                 and working with data written to mount path points,
-                specify ``filepath``s for (versioned) ``SparkDataSet``s
+                specify ``filepath``s for (versioned) ``SparkDataset``s
                 starting with ``/dbfs/mnt``.
             metadata: Any arbitrary metadata.
                 This is ignored by Kedro, but may be consumed by users or external plugins.
@@ -81,22 +83,18 @@ class DeltaTableDataSet(AbstractDataSet[None, DeltaTable]):
         self._filepath = PurePosixPath(filepath)
         self.metadata = metadata
 
-    @staticmethod
-    def _get_spark():
-        return SparkSession.builder.getOrCreate()
-
     def _load(self) -> DeltaTable:
         load_path = self._fs_prefix + str(self._filepath)
-        return DeltaTable.forPath(self._get_spark(), load_path)
+        return DeltaTable.forPath(_get_spark(), load_path)
 
     def _save(self, data: None) -> NoReturn:
-        raise DataSetError(f"{self.__class__.__name__} is a read only dataset type")
+        raise DatasetError(f"{self.__class__.__name__} is a read only dataset type")
 
     def _exists(self) -> bool:
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._filepath))
 
         try:
-            self._get_spark().read.load(path=load_path, format="delta")
+            _get_spark().read.load(path=load_path, format="delta")
         except AnalysisException as exception:
             # `AnalysisException.desc` is deprecated with pyspark >= 3.4
             message = exception.desc if hasattr(exception, "desc") else str(exception)

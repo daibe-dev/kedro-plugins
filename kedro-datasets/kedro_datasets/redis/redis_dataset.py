@@ -1,20 +1,17 @@
-"""``PickleDataSet`` loads/saves data from/to a Redis database. The underlying
+"""``PickleDataset`` loads/saves data from/to a Redis database. The underlying
 functionality is supported by the redis library, so it supports all allowed
 options for instantiating the redis app ``from_url`` and setting a value."""
-
 import importlib
 import os
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any
 
 import redis
-
-from .._io import AbstractDataset as AbstractDataSet
-from .._io import DatasetError as DataSetError
+from kedro.io.core import AbstractDataset, DatasetError
 
 
-class PickleDataSet(AbstractDataSet[Any, Any]):
-    """``PickleDataSet`` loads/saves data from/to a Redis database. The
+class PickleDataset(AbstractDataset[Any, Any]):
+    """``PickleDataset`` loads/saves data from/to a Redis database. The
     underlying functionality is supported by the redis library, so it supports
     all allowed options for instantiating the redis app ``from_url`` and setting
     a value.
@@ -26,13 +23,13 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
     .. code-block:: yaml
 
         my_python_object: # simple example
-          type: redis.PickleDataSet
+          type: redis.PickleDataset
           key: my_object
           from_url_args:
             url: redis://127.0.0.1:6379
 
         final_python_object: # example with save args
-          type: redis.PickleDataSet
+          type: redis.PickleDataset
           key: my_final_object
           from_url_args:
             url: redis://127.0.0.1:6379
@@ -43,36 +40,36 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.redis import PickleDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.redis import PickleDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                       'col3': [5, 6]})
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>>
-        >>> my_data = PickleDataSet(key="my_data")
+        >>> my_data = PickleDataset(key="my_data")
         >>> my_data.save(data)
         >>> reloaded = my_data.load()
         >>> assert data.equals(reloaded)
     """
 
     DEFAULT_REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         key: str,
         backend: str = "pickle",
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
-        credentials: Dict[str, Any] = None,
-        redis_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        redis_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``PickleDataSet``. This loads/saves data from/to
+        """Creates a new instance of ``PickleDataset``. This loads/saves data from/to
         a Redis database while deserialising/serialising. Supports custom backends to
         serialise/deserialise objects.
 
@@ -80,6 +77,7 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
             * `pickle`
             * `dill`
             * `compress_pickle`
+            * `cloudpickle`
 
         Example backends that are incompatible:
             * `torch`
@@ -95,6 +93,8 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
                 dill.loads: https://dill.readthedocs.io/en/latest/index.html#dill.loads
                 compress_pickle.loads:
                 https://lucianopaz.github.io/compress_pickle/html/api/compress_pickle.html#compress_pickle.compress_pickle.loads
+                cloudpickle.loads:
+                https://github.com/cloudpipe/cloudpickle/blob/master/tests/cloudpickle_test.py
                 All defaults are preserved.
             save_args: Pickle options for saving pickle files.
                 You can pass in arguments that the backend dump function specified accepts, e.g:
@@ -102,6 +102,8 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
                 dill.dumps: https://dill.readthedocs.io/en/latest/index.html#dill.dumps
                 compress_pickle.dumps:
                 https://lucianopaz.github.io/compress_pickle/html/api/compress_pickle.html#compress_pickle.compress_pickle.dumps
+                cloudpickle.dumps:
+                https://github.com/cloudpipe/cloudpickle/blob/master/tests/cloudpickle_test.py
                 All defaults are preserved.
             credentials: Credentials required to get access to the redis server.
                 E.g. `{"password": None}`.
@@ -158,14 +160,14 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
             **self._redis_from_url_args, **_credentials
         )
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {"key": self._key, **self._redis_from_url_args}
 
     # `redis_db` mypy does not work since it is optional and optional is not
     # accepted by pickle.loads.
     def _load(self) -> Any:
         if not self.exists():
-            raise DataSetError(f"The provided key {self._key} does not exists.")
+            raise DatasetError(f"The provided key {self._key} does not exists.")
         imported_backend = importlib.import_module(self._backend)
         return imported_backend.loads(  # type: ignore
             self._redis_db.get(self._key), **self._load_args
@@ -180,7 +182,7 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
                 **self._redis_set_args,
             )
         except Exception as exc:
-            raise DataSetError(
+            raise DatasetError(
                 f"{data.__class__} was not serialised due to: {exc}"
             ) from exc
 
@@ -188,6 +190,6 @@ class PickleDataSet(AbstractDataSet[Any, Any]):
         try:
             return bool(self._redis_db.exists(self._key))
         except Exception as exc:
-            raise DataSetError(
+            raise DatasetError(
                 f"The existence of key {self._key} could not be established due to: {exc}"
             ) from exc

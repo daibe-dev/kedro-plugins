@@ -1,6 +1,8 @@
-"""``AbstractVersionedDataSet`` implementation to access Spark dataframes using
-``pyspark``
+"""``AbstractVersionedDataset`` implementation to access Spark dataframes using
+``pyspark``.
 """
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -8,21 +10,48 @@ from copy import deepcopy
 from fnmatch import fnmatch
 from functools import partial
 from pathlib import PurePosixPath
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from warnings import warn
 
 import fsspec
 from hdfs import HdfsError, InsecureClient
-from kedro.io.core import Version, get_filepath_str, get_protocol_and_path
+from kedro.io.core import (
+    CLOUD_PROTOCOLS,
+    AbstractVersionedDataset,
+    DatasetError,
+    Version,
+    get_filepath_str,
+    get_protocol_and_path,
+)
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import StructType
 from pyspark.sql.utils import AnalysisException
 from s3fs import S3FileSystem
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
-
 logger = logging.getLogger(__name__)
+
+
+def _get_spark() -> Any:
+    """
+    Returns the SparkSession. In case databricks-connect is available we use it for
+    extended configuration mechanisms and notebook compatibility,
+    otherwise we use classic pyspark.
+    """
+    try:
+        # When using databricks-connect >= 13.0.0 (a.k.a databricks-connect-v2)
+        # the remote session is instantiated using the databricks module
+        # If the databricks-connect module is installed, we use a remote session
+        from databricks.connect import DatabricksSession
+
+        # We can't test this as there's no Databricks test env available
+        spark = DatabricksSession.builder.getOrCreate()  # pragma: no cover
+
+    except ImportError:
+        # For "normal" spark sessions that don't use databricks-connect
+        # we get spark normally
+        spark = SparkSession.builder.getOrCreate()
+
+    return spark
 
 
 def _parse_glob_pattern(pattern: str) -> str:
@@ -35,9 +64,9 @@ def _parse_glob_pattern(pattern: str) -> str:
     return "/".join(clean)
 
 
-def _split_filepath(filepath: str) -> Tuple[str, str]:
-    split_ = filepath.split("://", 1)
-    if len(split_) == 2:
+def _split_filepath(filepath: str | os.PathLike) -> tuple[str, str]:
+    split_ = str(filepath).split("://", 1)
+    if len(split_) == 2:  # noqa: PLR2004
         return split_[0] + "://", split_[1]
     return "", split_[0]
 
@@ -46,7 +75,7 @@ def _strip_dbfs_prefix(path: str, prefix: str = "/dbfs") -> str:
     return path[len(prefix) :] if path.startswith(prefix) else path
 
 
-def _dbfs_glob(pattern: str, dbutils: Any) -> List[str]:
+def _dbfs_glob(pattern: str, dbutils: Any) -> list[str]:
     """Perform a custom glob search in DBFS using the provided pattern.
     It is assumed that version paths are managed by Kedro only.
 
@@ -73,19 +102,19 @@ def _dbfs_glob(pattern: str, dbutils: Any) -> List[str]:
     return sorted(matched)
 
 
-def _get_dbutils(spark: SparkSession) -> Optional[Any]:
+def _get_dbutils(spark: SparkSession) -> Any:
     """Get the instance of 'dbutils' or None if the one could not be found."""
     dbutils = globals().get("dbutils")
     if dbutils:
         return dbutils
 
     try:
-        from pyspark.dbutils import DBUtils  # pylint: disable=import-outside-toplevel
+        from pyspark.dbutils import DBUtils
 
         dbutils = DBUtils(spark)
     except ImportError:
         try:
-            import IPython  # pylint: disable=import-outside-toplevel
+            import IPython
         except ImportError:
             pass
         else:
@@ -111,7 +140,7 @@ def _dbfs_exists(pattern: str, dbutils: Any) -> bool:
     try:
         dbutils.fs.ls(file)
         return True
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         return False
 
 
@@ -122,7 +151,7 @@ def _deployed_on_databricks() -> bool:
 
 class KedroHdfsInsecureClient(InsecureClient):
     """Subclasses ``hdfs.InsecureClient`` and implements ``hdfs_exists``
-    and ``hdfs_glob`` methods required by ``SparkDataSet``"""
+    and ``hdfs_glob`` methods required by ``SparkDataset``"""
 
     def hdfs_exists(self, hdfs_path: str) -> bool:
         """Determines whether given ``hdfs_path`` exists in HDFS.
@@ -135,7 +164,7 @@ class KedroHdfsInsecureClient(InsecureClient):
         """
         return bool(self.status(hdfs_path, strict=False))
 
-    def hdfs_glob(self, pattern: str) -> List[str]:
+    def hdfs_glob(self, pattern: str) -> list[str]:
         """Perform a glob search in HDFS using the provided pattern.
 
         Args:
@@ -162,8 +191,8 @@ class KedroHdfsInsecureClient(InsecureClient):
         return sorted(matched)
 
 
-class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
-    """``SparkDataSet`` loads and saves Spark dataframes.
+class SparkDataset(AbstractVersionedDataset[DataFrame, DataFrame]):
+    """``SparkDataset`` loads and saves Spark dataframes.
 
     Example usage for the
     `YAML API <https://kedro.readthedocs.io/en/stable/data/\
@@ -172,7 +201,7 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
     .. code-block:: yaml
 
         weather:
-          type: spark.SparkDataSet
+          type: spark.SparkDataset
           filepath: s3a://your_bucket/data/01_raw/weather/*
           file_format: csv
           load_args:
@@ -183,7 +212,7 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
             header: True
 
         weather_with_schema:
-          type: spark.SparkDataSet
+          type: spark.SparkDataset
           filepath: s3a://your_bucket/data/01_raw/weather/*
           file_format: csv
           load_args:
@@ -195,34 +224,34 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
             header: True
 
         weather_cleaned:
-          type: spark.SparkDataSet
+          type: spark.SparkDataset
           filepath: data/02_intermediate/data.parquet
           file_format: parquet
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
+
+    .. code-block:: pycon
 
         >>> from pyspark.sql import SparkSession
-        >>> from pyspark.sql.types import (StructField, StringType,
-        >>>                                IntegerType, StructType)
+        >>> from pyspark.sql.types import IntegerType, Row, StringType, StructField, StructType
         >>>
-        >>> from kedro_datasets.spark import SparkDataSet
+        >>> from kedro_datasets.spark import SparkDataset
         >>>
-        >>> schema = StructType([StructField("name", StringType(), True),
-        >>>                      StructField("age", IntegerType(), True)])
+        >>> schema = StructType(
+        ...     [StructField("name", StringType(), True), StructField("age", IntegerType(), True)]
+        ... )
         >>>
-        >>> data = [('Alex', 31), ('Bob', 12), ('Clarke', 65), ('Dave', 29)]
+        >>> data = [("Alex", 31), ("Bob", 12), ("Clarke", 65), ("Dave", 29)]
         >>>
-        >>> spark_df = SparkSession.builder.getOrCreate()\
-        >>>                        .createDataFrame(data, schema)
+        >>> spark_df = SparkSession.builder.getOrCreate().createDataFrame(data, schema)
         >>>
-        >>> data_set = SparkDataSet(filepath="test_data")
-        >>> data_set.save(spark_df)
-        >>> reloaded = data_set.load()
+        >>> dataset = SparkDataset(filepath=tmp_path / "test_data")
+        >>> dataset.save(spark_df)
+        >>> reloaded = dataset.load()
         >>>
-        >>> reloaded.take(4)
+        >>> assert Row(name="Bob", age=12) in reloaded.take(4)
     """
 
     # this dataset cannot be used with ``ParallelRunner``,
@@ -230,20 +259,21 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
     # for parallelism within a Spark pipeline please consider
     # ``ThreadRunner`` instead
     _SINGLE_PROCESS = True
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    def __init__(  # pylint: disable=too-many-arguments disable=too-many-locals
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
         file_format: str = "parquet",
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``SparkDataSet``.
+        """Creates a new instance of ``SparkDataset``.
 
         Args:
             filepath: Filepath in POSIX format to a Spark dataframe. When using Databricks
@@ -283,9 +313,13 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
         glob_function = None
         self.metadata = metadata
 
-        if not filepath.startswith("/dbfs/") and _deployed_on_databricks():
+        if (
+            not filepath.startswith("/dbfs/")
+            and fs_prefix not in (protocol + "://" for protocol in CLOUD_PROTOCOLS)
+            and _deployed_on_databricks()
+        ):
             logger.warning(
-                "Using SparkDataSet on Databricks without the `/dbfs/` prefix in the "
+                "Using SparkDataset on Databricks without the `/dbfs/` prefix in the "
                 "filepath is a known source of error. You must add this prefix to %s",
                 filepath,
             )
@@ -314,7 +348,7 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
         elif filepath.startswith("/dbfs/"):
             # dbfs add prefix to Spark path by default
             # See https://github.com/kedro-org/kedro-plugins/issues/117
-            dbutils = _get_dbutils(self._get_spark())
+            dbutils = _get_dbutils(_get_spark())
             if dbutils:
                 glob_function = partial(_dbfs_glob, dbutils=dbutils)
                 exists_function = partial(_dbfs_exists, dbutils=dbutils)
@@ -349,10 +383,10 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
         self._handle_delta_format()
 
     @staticmethod
-    def _load_schema_from_file(schema: Dict[str, Any]) -> StructType:
+    def _load_schema_from_file(schema: dict[str, Any]) -> StructType:
         filepath = schema.get("filepath")
         if not filepath:
-            raise DataSetError(
+            raise DatasetError(
                 "Schema load argument does not specify a 'filepath' attribute. Please"
                 "include a path to a JSON-serialised 'pyspark.sql.types.StructType'."
             )
@@ -368,12 +402,12 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
             try:
                 return StructType.fromJson(json.loads(fs_file.read()))
             except Exception as exc:
-                raise DataSetError(
+                raise DatasetError(
                     f"Contents of 'schema.filepath' ({schema_path}) are invalid. Please"
                     f"provide a valid JSON-serialised 'pyspark.sql.types.StructType'."
                 ) from exc
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._fs_prefix + str(self._filepath),
             "file_format": self._file_format,
@@ -382,13 +416,9 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
             "version": self._version,
         }
 
-    @staticmethod
-    def _get_spark():
-        return SparkSession.builder.getOrCreate()
-
     def _load(self) -> DataFrame:
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_load_path()))
-        read_obj = self._get_spark().read
+        read_obj = _get_spark().read
 
         # Pass schema if defined
         if self._schema:
@@ -404,7 +434,7 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_load_path()))
 
         try:
-            self._get_spark().read.load(load_path, self._file_format)
+            _get_spark().read.load(load_path, self._file_format)
         except AnalysisException as exception:
             # `AnalysisException.desc` is deprecated with pyspark >= 3.4
             message = exception.desc if hasattr(exception, "desc") else str(exception)
@@ -421,8 +451,8 @@ class SparkDataSet(AbstractVersionedDataSet[DataFrame, DataFrame]):
             and self._file_format == "delta"
             and write_mode not in supported_modes
         ):
-            raise DataSetError(
+            raise DatasetError(
                 f"It is not possible to perform 'save()' for file format 'delta' "
-                f"with mode '{write_mode}' on 'SparkDataSet'. "
-                f"Please use 'spark.DeltaTableDataSet' instead."
+                f"with mode '{write_mode}' on 'SparkDataset'. "
+                f"Please use 'spark.DeltaTableDataset' instead."
             )

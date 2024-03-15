@@ -1,11 +1,12 @@
-"""``AbstractDataSet`` implementations for managing email messages."""
+"""``AbstractDataset`` implementations for managing email messages."""
 from typing import Any
 
 import lazy_loader as lazy
 
 # https://github.com/pylint-dev/pylint/issues/4300#issuecomment-1043601901
-EmailMessageDataSet: Any
+EmailMessageDataset: Any
 
 __getattr__, __dir__, __all__ = lazy.attach(
-    __name__, submod_attrs={"message_dataset": ["EmailMessageDataSet"]}
+    __name__,
+    submod_attrs={"message_dataset": ["EmailMessageDataset"]},
 )

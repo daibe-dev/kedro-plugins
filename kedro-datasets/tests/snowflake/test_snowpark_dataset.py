@@ -2,12 +2,12 @@ import datetime
 import os
 
 import pytest
-from kedro.io import DataSetError
+from kedro.io.core import DatasetError
 
 try:
     import snowflake.snowpark as sp
 
-    from kedro_datasets.snowflake import SnowparkTableDataSet as spds
+    from kedro_datasets.snowflake import SnowparkTableDataset as spds
 except ImportError:
     pass  # this is only for test discovery to succeed on Python <> 3.8
 
@@ -24,7 +24,7 @@ def get_connection():
     if not (
         account and warehouse and database and role and user and schema and password
     ):
-        raise DataSetError(
+        raise DatasetError(
             "Snowflake connection environment variables provided not in full"
         )
 
@@ -136,7 +136,7 @@ def sf_session():
     sf_session.close()
 
 
-class TestSnowparkTableDataSet:
+class TestSnowparkTableDataset:
     @pytest.mark.snowflake
     def test_save(self, sample_sp_df, sf_session):
         sp_df = spds(table_name="KEDRO_PYTEST_TESTSAVE", credentials=get_connection())
@@ -153,7 +153,7 @@ class TestSnowparkTableDataSet:
 
         # Ignoring dtypes as ex. age can be int8 vs int64 and pandas.compare
         # fails on that
-        assert df_equals_ignore_dtype(sample_sp_df, sp_df) is True
+        assert df_equals_ignore_dtype(sample_sp_df, sp_df)
 
     @pytest.mark.snowflake
     def test_exists(self, sf_session):
@@ -162,5 +162,5 @@ class TestSnowparkTableDataSet:
         df_ne = spds(
             table_name="KEDRO_PYTEST_TESTNEXISTS", credentials=get_connection()
         )
-        assert df_e._exists() is True
-        assert df_ne._exists() is False
+        assert df_e._exists()
+        assert not df_ne._exists()

@@ -1,18 +1,15 @@
-"""SparkJDBCDataSet to load and save a PySpark DataFrame via JDBC."""
-
+"""SparkJDBCDataset to load and save a PySpark DataFrame via JDBC."""
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any
 
-from pyspark.sql import DataFrame, SparkSession
+from kedro.io.core import AbstractDataset, DatasetError
+from pyspark.sql import DataFrame
 
-from .._io import AbstractDataset as AbstractDataSet
-from .._io import DatasetError as DataSetError
-
-__all__ = ["SparkJDBCDataSet"]
+from kedro_datasets.spark.spark_dataset import _get_spark
 
 
-class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
-    """``SparkJDBCDataSet`` loads data from a database table accessible
+class SparkJDBCDataset(AbstractDataset[DataFrame, DataFrame]):
+    """``SparkJDBCDataset`` loads data from a database table accessible
     via JDBC URL url and connection properties and saves the content of
     a PySpark DataFrame to an external database table via JDBC.  It uses
     ``pyspark.sql.DataFrameReader`` and ``pyspark.sql.DataFrameWriter``
@@ -25,7 +22,7 @@ class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
     .. code-block:: yaml
 
         weather:
-          type: spark.SparkJDBCDataSet
+          type: spark.SparkJDBCDataset
           table: weather_table
           url: jdbc:postgresql://localhost/test
           credentials: db_credentials
@@ -39,46 +36,49 @@ class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
+
+    .. code-block:: pycon
 
         >>> import pandas as pd
-        >>> from kedro_datasets import SparkJBDCDataSet
+        >>> from kedro_datasets.spark import SparkJDBCDataset
         >>> from pyspark.sql import SparkSession
         >>>
         >>> spark = SparkSession.builder.getOrCreate()
-        >>> data = spark.createDataFrame(pd.DataFrame({'col1': [1, 2],
-        >>>                                            'col2': [4, 5],
-        >>>                                            'col3': [5, 6]}))
-        >>> url = 'jdbc:postgresql://localhost/test'
-        >>> table = 'table_a'
-        >>> connection_properties = {'driver': 'org.postgresql.Driver'}
-        >>> data_set = SparkJDBCDataSet(
-        >>>     url=url, table=table, credentials={'user': 'scott',
-        >>>                                        'password': 'tiger'},
-        >>>     load_args={'properties': connection_properties},
-        >>>     save_args={'properties': connection_properties})
+        >>> data = spark.createDataFrame(
+        ...     pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
+        ... )
+        >>> url = "jdbc:postgresql://localhost/test"
+        >>> table = "table_a"
+        >>> connection_properties = {"driver": "org.postgresql.Driver"}
+        >>> dataset = SparkJDBCDataset(
+        ...     url=url,
+        ...     table=table,
+        ...     credentials={"user": "scott", "password": "tiger"},
+        ...     load_args={"properties": connection_properties},
+        ...     save_args={"properties": connection_properties},
+        ... )
         >>>
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>>
         >>> assert data.toPandas().equals(reloaded.toPandas())
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         url: str,
         table: str,
-        credentials: Dict[str, Any] = None,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new ``SparkJDBCDataSet``.
+        """Creates a new ``SparkJDBCDataset``.
 
         Args:
             url: A JDBC URL of the form ``jdbc:subprotocol:subname``.
@@ -100,19 +100,19 @@ class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
                 This is ignored by Kedro, but may be consumed by users or external plugins.
 
         Raises:
-            DataSetError: When either ``url`` or ``table`` is empty or
+            DatasetError: When either ``url`` or ``table`` is empty or
                 when a property is provided with a None value.
         """
 
         if not url:
-            raise DataSetError(
+            raise DatasetError(
                 "'url' argument cannot be empty. Please "
                 "provide a JDBC URL of the form "
                 "'jdbc:subprotocol:subname'."
             )
 
         if not table:
-            raise DataSetError(
+            raise DatasetError(
                 "'table' argument cannot be empty. Please "
                 "provide the name of the table to load or save "
                 "data to."
@@ -136,7 +136,7 @@ class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
             # Check credentials for bad inputs.
             for cred_key, cred_value in credentials.items():
                 if cred_value is None:
-                    raise DataSetError(
+                    raise DatasetError(
                         f"Credential property '{cred_key}' cannot be None. "
                         f"Please provide a value."
                     )
@@ -146,7 +146,7 @@ class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
             self._load_args["properties"] = {**load_properties, **credentials}
             self._save_args["properties"] = {**save_properties, **credentials}
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         load_args = self._load_args
         save_args = self._save_args
 
@@ -169,12 +169,8 @@ class SparkJDBCDataSet(AbstractDataSet[DataFrame, DataFrame]):
             "save_args": save_args,
         }
 
-    @staticmethod
-    def _get_spark():  # pragma: no cover
-        return SparkSession.builder.getOrCreate()
-
     def _load(self) -> DataFrame:
-        return self._get_spark().read.jdbc(self._url, self._table, **self._load_args)
+        return _get_spark().read.jdbc(self._url, self._table, **self._load_args)
 
     def _save(self, data: DataFrame) -> None:
         return data.write.jdbc(self._url, self._table, **self._save_args)

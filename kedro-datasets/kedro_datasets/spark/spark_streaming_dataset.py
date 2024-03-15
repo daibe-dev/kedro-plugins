@@ -1,22 +1,22 @@
-"""SparkStreamingDataSet to load and save a PySpark Streaming DataFrame."""
+"""SparkStreamingDataset to load and save a PySpark Streaming DataFrame."""
 from copy import deepcopy
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
-from pyspark.sql import DataFrame, SparkSession
+from kedro.io.core import AbstractDataset
+from pyspark.sql import DataFrame
 from pyspark.sql.utils import AnalysisException
 
 from kedro_datasets.spark.spark_dataset import (
-    SparkDataSet,
+    SparkDataset,
+    _get_spark,
     _split_filepath,
     _strip_dbfs_prefix,
 )
 
-from .._io import AbstractDataset as AbstractDataSet
 
-
-class SparkStreamingDataSet(AbstractDataSet):
-    """``SparkStreamingDataSet`` loads data to Spark Streaming Dataframe objects.
+class SparkStreamingDataset(AbstractDataset):
+    """``SparkStreamingDataset`` loads data to Spark Streaming Dataframe objects.
 
     Example usage for the
     `YAML API <https://kedro.readthedocs.io/en/stable/data/\
@@ -25,7 +25,7 @@ class SparkStreamingDataSet(AbstractDataSet):
     .. code-block:: yaml
 
         raw.new_inventory:
-          type: spark.SparkStreamingDataSet
+          type: spark.SparkStreamingDataset
           filepath: data/01_raw/stream/inventory/
           file_format: json
           save_args:
@@ -42,12 +42,13 @@ class SparkStreamingDataSet(AbstractDataSet):
 
     def __init__(
         self,
+        *,
         filepath: str = "",
         file_format: str = "",
-        save_args: Dict[str, Any] = None,
-        load_args: Dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of SparkStreamingDataSet.
+        """Creates a new instance of SparkStreamingDataset.
 
         Args:
             filepath: Filepath in POSIX format to a Spark dataframe. When using Databricks
@@ -92,9 +93,9 @@ class SparkStreamingDataSet(AbstractDataSet):
         self._schema = self._load_args.pop("schema", None)
         if self._schema is not None:
             if isinstance(self._schema, dict):
-                self._schema = SparkDataSet._load_schema_from_file(self._schema)
+                self._schema = SparkDataset._load_schema_from_file(self._schema)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         """Returns a dict that describes attributes of the dataset."""
         return {
             "filepath": self._fs_prefix + str(self._filepath),
@@ -102,10 +103,6 @@ class SparkStreamingDataSet(AbstractDataSet):
             "load_args": self._load_args,
             "save_args": self._save_args,
         }
-
-    @staticmethod
-    def _get_spark():
-        return SparkSession.builder.getOrCreate()
 
     def _load(self) -> DataFrame:
         """Loads data from filepath.
@@ -116,7 +113,7 @@ class SparkStreamingDataSet(AbstractDataSet):
         """
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._filepath))
         data_stream_reader = (
-            self._get_spark()
+            _get_spark()
             .readStream.schema(self._schema)
             .format(self._file_format)
             .options(**self._load_args)
@@ -145,7 +142,7 @@ class SparkStreamingDataSet(AbstractDataSet):
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._filepath))
 
         try:
-            self._get_spark().readStream.schema(self._schema).load(
+            _get_spark().readStream.schema(self._schema).load(
                 load_path, self._file_format
             )
         except AnalysisException as exception:

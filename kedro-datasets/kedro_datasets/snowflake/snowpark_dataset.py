@@ -1,19 +1,17 @@
-"""``AbstractDataSet`` implementation to access Snowflake using Snowpark dataframes
+"""``AbstractDataset`` implementation to access Snowflake using Snowpark dataframes
 """
 import logging
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any
 
 import snowflake.snowpark as sp
-
-from .._io import AbstractDataset as AbstractDataSet
-from .._io import DatasetError as DataSetError
+from kedro.io.core import AbstractDataset, DatasetError
 
 logger = logging.getLogger(__name__)
 
 
-class SnowparkTableDataSet(AbstractDataSet):
-    """``SnowparkTableDataSet`` loads and saves Snowpark dataframes.
+class SnowparkTableDataset(AbstractDataset):
+    """``SnowparkTableDataset`` loads and saves Snowpark dataframes.
 
     As of Mar-2023, the snowpark connector only works with Python 3.8.
 
@@ -24,7 +22,7 @@ class SnowparkTableDataSet(AbstractDataSet):
     .. code-block:: yaml
 
         weather:
-          type: kedro_datasets.snowflake.SnowparkTableDataSet
+          type: kedro_datasets.snowflake.SnowparkTableDataset
           table_name: "weather_data"
           database: "meteorology"
           schema: "observations"
@@ -50,7 +48,7 @@ class SnowparkTableDataSet(AbstractDataSet):
     .. code-block:: yaml
 
         weather:
-          type: kedro_datasets.snowflake.SnowparkTableDataSet
+          type: kedro_datasets.snowflake.SnowparkTableDataset
           table_name: "weather_data"
           database: "meteorology"
           schema: "observations"
@@ -61,7 +59,7 @@ class SnowparkTableDataSet(AbstractDataSet):
             table_type: ''
 
         polygons:
-          type: kedro_datasets.snowflake.SnowparkTableDataSet
+          type: kedro_datasets.snowflake.SnowparkTableDataset
           table_name: "geopolygons"
           credentials: snowflake_client
           schema: "geodata"
@@ -99,20 +97,21 @@ class SnowparkTableDataSet(AbstractDataSet):
     # for parallelism within a pipeline please consider
     # ``ThreadRunner`` instead
     _SINGLE_PROCESS = True
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         table_name: str,
         schema: str = None,
         database: str = None,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
-        credentials: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``SnowparkTableDataSet``.
+        """Creates a new instance of ``SnowparkTableDataset``.
 
         Args:
             table_name: The table name to load or save data to.
@@ -136,21 +135,21 @@ class SnowparkTableDataSet(AbstractDataSet):
         """
 
         if not table_name:
-            raise DataSetError("'table_name' argument cannot be empty.")
+            raise DatasetError("'table_name' argument cannot be empty.")
 
         if not credentials:
-            raise DataSetError("'credentials' argument cannot be empty.")
+            raise DatasetError("'credentials' argument cannot be empty.")
 
         if not database:
             if not ("database" in credentials and credentials["database"]):
-                raise DataSetError(
+                raise DatasetError(
                     "'database' must be provided by credentials or dataset."
                 )
             database = credentials["database"]
 
         if not schema:
             if not ("schema" in credentials and credentials["schema"]):
-                raise DataSetError(
+                raise DatasetError(
                     "'schema' must be provided by credentials or dataset."
                 )
             schema = credentials["schema"]
@@ -171,11 +170,10 @@ class SnowparkTableDataSet(AbstractDataSet):
             {"database": self._database, "schema": self._schema}
         )
         self._connection_parameters = connection_parameters
-        self._session = self._get_session(self._connection_parameters)
 
         self.metadata = metadata
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "table_name": self._table_name,
             "database": self._database,
@@ -185,7 +183,7 @@ class SnowparkTableDataSet(AbstractDataSet):
     @staticmethod
     def _get_session(connection_parameters) -> sp.Session:
         """Given a connection string, create singleton connection
-        to be used across all instances of `SnowparkTableDataSet` that
+        to be used across all instances of `SnowparkTableDataset` that
         need to connect to the same source.
         connection_parameters is a dictionary of any values
         supported by snowflake python connector:
@@ -206,9 +204,13 @@ class SnowparkTableDataSet(AbstractDataSet):
             logger.debug("Trying to reuse active snowpark session...")
             session = sp.context.get_active_session()
         except sp.exceptions.SnowparkSessionException:
-            logger.debug("No active snowpark session found. Creating")
+            logger.debug("No active snowpark session found. Creating...")
             session = sp.Session.builder.configs(connection_parameters).create()
         return session
+
+    @property
+    def _session(self) -> sp.Session:
+        return self._get_session(self._connection_parameters)
 
     def _load(self) -> sp.DataFrame:
         table_name = [

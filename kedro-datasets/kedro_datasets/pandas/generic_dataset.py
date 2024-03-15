@@ -1,17 +1,20 @@
-"""``GenericDataSet`` loads/saves data from/to a data file using an underlying
+"""``GenericDataset`` loads/saves data from/to a data file using an underlying
 filesystem (e.g.: local, S3, GCS). It uses pandas to handle the
 type of read/write target.
 """
 from copy import deepcopy
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
 import pandas as pd
-from kedro.io.core import Version, get_filepath_str, get_protocol_and_path
-
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
+from kedro.io.core import (
+    AbstractVersionedDataset,
+    DatasetError,
+    Version,
+    get_filepath_str,
+    get_protocol_and_path,
+)
 
 NON_FILE_SYSTEM_TARGETS = [
     "clipboard",
@@ -25,8 +28,8 @@ NON_FILE_SYSTEM_TARGETS = [
 ]
 
 
-class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
-    """`pandas.GenericDataSet` loads/saves data from/to a data file using an underlying
+class GenericDataset(AbstractVersionedDataset[pd.DataFrame, pd.DataFrame]):
+    """`pandas.GenericDataset` loads/saves data from/to a data file using an underlying
     filesystem (e.g.: local, S3, GCS). It uses pandas to dynamically select the
     appropriate type of read/write target on a best effort basis.
 
@@ -37,7 +40,7 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     .. code-block:: yaml
 
         cars:
-          type: pandas.GenericDataSet
+          type: pandas.GenericDataset
           file_format: csv
           filepath: s3://data/01_raw/company/cars.csv
           load_args:
@@ -48,13 +51,13 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
             date_format: "%Y-%m-%d"
 
     This second example is able to load a SAS7BDAT file via the ``pd.read_sas`` method.
-    Trying to save this dataset will raise a ``DataSetError`` since pandas does not provide an
+    Trying to save this dataset will raise a ``DatasetError`` since pandas does not provide an
     equivalent ``pd.DataFrame.to_sas`` write method.
 
     .. code-block:: yaml
 
         flights:
-           type: pandas.GenericDataSet
+           type: pandas.GenericDataset
            file_format: sas
            filepath: data/01_raw/airplanes.sas7bdat
            load_args:
@@ -63,37 +66,39 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pandas import GenericDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import GenericDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                      'col3': [5, 6]})
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>>
-        >>> data_set = GenericDataSet(filepath="test.csv", file_format='csv')
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset = GenericDataset(
+        ...     filepath=tmp_path / "test.csv", file_format="csv", save_args={"index": False}
+        ... )
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>> assert data.equals(reloaded)
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
         file_format: str,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ):
-        """Creates a new instance of ``GenericDataSet`` pointing to a concrete data file
+        """Creates a new instance of ``GenericDataset`` pointing to a concrete data file
         on a specific filesystem. The appropriate pandas load/save methods are
         dynamically identified by string matching on a best effort basis.
 
@@ -136,7 +141,7 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
                 This is ignored by Kedro, but may be consumed by users or external plugins.
 
         Raises:
-            DataSetError: Will be raised if at least less than one appropriate
+            DatasetError: Will be raised if at least less than one appropriate
                 read or write methods are identified.
         """
 
@@ -177,7 +182,7 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     def _ensure_file_system_target(self) -> None:
         # Fail fast if provided a known non-filesystem target
         if self._file_format in NON_FILE_SYSTEM_TARGETS:
-            raise DataSetError(
+            raise DatasetError(
                 f"Cannot create a dataset of file_format '{self._file_format}' as it "
                 f"does not support a filepath target/source."
             )
@@ -190,7 +195,7 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
         if load_method:
             with self._fs.open(load_path, **self._fs_open_args_load) as fs_file:
                 return load_method(fs_file, **self._load_args)
-        raise DataSetError(
+        raise DatasetError(
             f"Unable to retrieve 'pandas.read_{self._file_format}' method, please ensure that your "
             "'file_format' parameter has been defined correctly as per the Pandas API "
             "https://pandas.pydata.org/docs/reference/io.html"
@@ -207,7 +212,7 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
                 save_method(fs_file, **self._save_args)
                 self._invalidate_cache()
         else:
-            raise DataSetError(
+            raise DatasetError(
                 f"Unable to retrieve 'pandas.DataFrame.to_{self._file_format}' method, please "
                 "ensure that your 'file_format' parameter has been defined correctly as "
                 "per the Pandas API "
@@ -217,12 +222,12 @@ class GenericDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "file_format": self._file_format,
             "filepath": self._filepath,

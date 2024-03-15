@@ -1,19 +1,19 @@
-"""``DeltaTableDataSet`` loads/saves delta tables from/to a filesystem (e.g.: local,
+"""``DeltaTableDataset`` loads/saves delta tables from/to a filesystem (e.g.: local,
 S3, GCS), Databricks unity catalog and AWS Glue catalog respectively. It handles
 load and save using a pandas dataframe.
 """
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import pandas as pd
 from deltalake import DataCatalog, DeltaTable, Metadata
 from deltalake.exceptions import TableNotFoundError
 from deltalake.writer import write_deltalake
-from kedro.io.core import AbstractDataSet, DataSetError
+from kedro.io.core import AbstractDataset, DatasetError
 
 
-class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-attributes
-    """``DeltaTableDataSet`` loads/saves delta tables from/to a filesystem (e.g.: local,
+class DeltaTableDataset(AbstractDataset):
+    """``DeltaTableDataset`` loads/saves delta tables from/to a filesystem (e.g.: local,
     S3, GCS), Databricks unity catalog and AWS Glue catalog respectively. It handles
     load and save using a pandas dataframe. When saving data, you can specify one of two
     modes: overwrite(default), append. If you wish to alter the schema as a part of
@@ -28,7 +28,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
     .. code-block:: yaml
 
         boats_filesystem:
-          type: pandas.DeltaTableDataSet
+          type: pandas.DeltaTableDataset
           filepath: data/01_raw/boats
           credentials: dev_creds
           load_args:
@@ -37,7 +37,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
             mode: overwrite
 
         boats_databricks_unity_catalog:
-          type: pandas.DeltaTableDataSet
+          type: pandas.DeltaTableDataset
           credentials: dev_creds
           catalog_type: UNITY
           database: simple_database
@@ -46,7 +46,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
             mode: overwrite
 
         trucks_aws_glue_catalog:
-          type: pandas.DeltaTableDataSet
+          type: pandas.DeltaTableDataset
           credentials: dev_creds
           catalog_type: AWS
           catalog_name: main
@@ -58,43 +58,45 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pandas import DeltaTableDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import DeltaTableDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5], 'col3': [5, 6]})
-        >>> data_set = DeltaTableDataSet(filepath="test")
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
+        >>> dataset = DeltaTableDataset(filepath=tmp_path / "test")
         >>>
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>> assert data.equals(reloaded)
         >>>
-        >>> new_data = pd.DataFrame({'col1': [7, 8], 'col2': [9, 10], 'col3': [11, 12]})
-        >>> data_set.save(new_data)
-        >>> data_set.get_loaded_version()
+        >>> new_data = pd.DataFrame({"col1": [7, 8], "col2": [9, 10], "col3": [11, 12]})
+        >>> dataset.save(new_data)
+        >>> assert isinstance(dataset.get_loaded_version(), int)
 
     """
 
     DEFAULT_WRITE_MODE = "overwrite"
     ACCEPTED_WRITE_MODES = ("overwrite", "append")
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {"mode": DEFAULT_WRITE_MODE}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {"mode": DEFAULT_WRITE_MODE}
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: Optional[str] = None,
         catalog_type: Optional[DataCatalog] = None,
         catalog_name: Optional[str] = None,
         database: Optional[str] = None,
         table: Optional[str] = None,
-        load_args: Optional[Dict[str, Any]] = None,
-        save_args: Optional[Dict[str, Any]] = None,
-        credentials: Optional[Dict[str, Any]] = None,
-        fs_args: Optional[Dict[str, Any]] = None,
+        load_args: Optional[dict[str, Any]] = None,
+        save_args: Optional[dict[str, Any]] = None,
+        credentials: Optional[dict[str, Any]] = None,
+        fs_args: Optional[dict[str, Any]] = None,
     ) -> None:
-        """Creates a new instance of ``DeltaTableDataSet``
+        """Creates a new instance of ``DeltaTableDataset``
 
         Args:
             filepath (str): Filepath to a delta lake file with the following accepted protocol:
@@ -112,7 +114,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
                 Defaults to None.
             table (str, Optional): the name of the table.
             load_args (Dict[str, Any], Optional): Additional options for loading file(s)
-                into DeltaTableDataSet. `load_args` accepts `version` to load the appropriate
+                into DeltaTableDataset. `load_args` accepts `version` to load the appropriate
                 version when loading from a filesystem.
             save_args (Dict[str, Any], Optional): Additional saving options for saving into
                 Delta lake. Here you can find all available arguments:
@@ -124,7 +126,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
                 filesystem class constructor.
                 (e.g. `{"project": "my-project"}` for ``GCSFileSystem``).
         Raises:
-            DataSetError: Invalid configuration supplied (through DeltaTableDataSet validation)
+            DatasetError: Invalid configuration supplied (through DeltaTableDataset validation)
 
         """
         self._filepath = filepath
@@ -150,7 +152,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
 
         write_mode = self._save_args.get("mode", None)
         if write_mode not in self.ACCEPTED_WRITE_MODES:
-            raise DataSetError(
+            raise DatasetError(
                 f"Write mode {write_mode} is not supported, "
                 f"Please use any of the following accepted modes "
                 f"{self.ACCEPTED_WRITE_MODES}"
@@ -159,8 +161,8 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
         self._version = self._load_args.get("version", None)
 
         if self._filepath and self._catalog_type:
-            raise DataSetError(
-                "DeltaTableDataSet can either load from "
+            raise DatasetError(
+                "DeltaTableDataset can either load from "
                 "filepath or catalog_type. Please provide "
                 "one of either filepath or catalog_type."
             )
@@ -183,20 +185,20 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
             )
 
     @property
-    def fs_args(self) -> Dict[str, Any]:
+    def fs_args(self) -> dict[str, Any]:
         """Appends and returns filesystem credentials to fs_args."""
         fs_args = deepcopy(self._fs_args)
         fs_args.update(self._credentials)
         return fs_args
 
     @property
-    def schema(self) -> Dict[str, Any]:
-        """Returns the schema of the DeltaTableDataSet as a dictionary."""
+    def schema(self) -> dict[str, Any]:
+        """Returns the schema of the DeltaTableDataset as a dictionary."""
         return self._delta_table.schema().json()
 
     @property
     def metadata(self) -> Metadata:
-        """Returns the metadata of the DeltaTableDataSet as a dictionary.
+        """Returns the metadata of the DeltaTableDataset as a dictionary.
         Metadata contains the following:
         1. A unique id
         2. A name, if provided
@@ -211,12 +213,12 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
         return self._delta_table.metadata()
 
     @property
-    def history(self) -> List[Dict[str, Any]]:
-        """Returns the history of actions on DeltaTableDataSet as a list of dictionaries."""
+    def history(self) -> list[dict[str, Any]]:
+        """Returns the history of actions on DeltaTableDataset as a list of dictionaries."""
         return self._delta_table.history()
 
     def get_loaded_version(self) -> int:
-        """Returns the version of the DeltaTableDataSet that is currently loaded."""
+        """Returns the version of the DeltaTableDataset that is currently loaded."""
         return self._delta_table.version()
 
     def _load(self) -> pd.DataFrame:
@@ -245,7 +247,7 @@ class DeltaTableDataSet(AbstractDataSet):  # pylint:disable=too-many-instance-at
                 **self._save_args,
             )
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "catalog_type": self._catalog_type,

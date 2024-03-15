@@ -1,64 +1,63 @@
-"""``XMLDataSet`` loads/saves data from/to a XML file using an underlying
+"""``XMLDataset`` loads/saves data from/to a XML file using an underlying
 filesystem (e.g.: local, S3, GCS). It uses pandas to handle the XML file.
 """
 import logging
 from copy import deepcopy
 from io import BytesIO
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
 import pandas as pd
 from kedro.io.core import (
     PROTOCOL_DELIMITER,
+    AbstractVersionedDataset,
+    DatasetError,
     Version,
     get_filepath_str,
     get_protocol_and_path,
 )
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
-
 logger = logging.getLogger(__name__)
 
 
-class XMLDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
-    """``XMLDataSet`` loads/saves data from/to a XML file using an underlying
+class XMLDataset(AbstractVersionedDataset[pd.DataFrame, pd.DataFrame]):
+    """``XMLDataset`` loads/saves data from/to a XML file using an underlying
     filesystem (e.g.: local, S3, GCS). It uses pandas to handle the XML file.
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pandas import XMLDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import XMLDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                      'col3': [5, 6]})
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>>
-        >>> data_set = XMLDataSet(filepath="test.xml")
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset = XMLDataset(filepath=tmp_path / "test.xml")
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>> assert data.equals(reloaded)
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {"index": False}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {"index": False}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``XMLDataSet`` pointing to a concrete XML file
+        """Creates a new instance of ``XMLDataset`` pointing to a concrete XML file
         on a specific filesystem.
 
         Args:
@@ -122,7 +121,7 @@ class XMLDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
             self._save_args.pop("storage_options", None)
             self._load_args.pop("storage_options", None)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -159,7 +158,7 @@ class XMLDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)

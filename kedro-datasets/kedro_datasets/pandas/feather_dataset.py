@@ -1,4 +1,4 @@
-"""``FeatherDataSet`` is a data set used to load and save data to feather files
+"""``FeatherDataset`` is a data set used to load and save data to feather files
 using an underlying filesystem (e.g.: local, S3, GCS). The underlying functionality
 is supported by pandas, so it supports all operations the pandas supports.
 """
@@ -6,24 +6,23 @@ import logging
 from copy import deepcopy
 from io import BytesIO
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
 import pandas as pd
 from kedro.io.core import (
     PROTOCOL_DELIMITER,
+    AbstractVersionedDataset,
     Version,
     get_filepath_str,
     get_protocol_and_path,
 )
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-
 logger = logging.getLogger(__name__)
 
 
-class FeatherDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
-    """``FeatherDataSet`` loads and saves data to a feather file using an
+class FeatherDataset(AbstractVersionedDataset[pd.DataFrame, pd.DataFrame]):
+    """``FeatherDataset`` loads and saves data to a feather file using an
     underlying filesystem (e.g.: local, S3, GCS). The underlying functionality
     is supported by pandas, so it supports all allowed pandas options
     for loading and saving csv files.
@@ -35,52 +34,52 @@ class FeatherDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     .. code-block:: yaml
 
         cars:
-          type: pandas.FeatherDataSet
+          type: pandas.FeatherDataset
           filepath: data/01_raw/company/cars.feather
           load_args:
             columns: ['col1', 'col2', 'col3']
             use_threads: True
 
         motorbikes:
-          type: pandas.FeatherDataSet
+          type: pandas.FeatherDataset
           filepath: s3://your_bucket/data/02_intermediate/company/motorbikes.feather
           credentials: dev_s3
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pandas import FeatherDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import FeatherDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                      'col3': [5, 6]})
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>>
-        >>> data_set = FeatherDataSet(filepath="test.feather")
+        >>> dataset = FeatherDataset(filepath=tmp_path / "test.feather")
         >>>
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>>
         >>> assert data.equals(reloaded)
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``FeatherDataSet`` pointing to a concrete
+        """Creates a new instance of ``FeatherDataset`` pointing to a concrete
         filepath.
 
         Args:
@@ -144,7 +143,7 @@ class FeatherDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
             self._save_args.pop("storage_options", None)
             self._load_args.pop("storage_options", None)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,

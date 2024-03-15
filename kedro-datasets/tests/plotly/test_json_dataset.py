@@ -1,3 +1,4 @@
+import inspect
 from pathlib import PurePosixPath
 
 import plotly.express as px
@@ -6,11 +7,10 @@ from adlfs import AzureBlobFileSystem
 from fsspec.implementations.http import HTTPFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from gcsfs import GCSFileSystem
-from kedro.io import DataSetError
-from kedro.io.core import PROTOCOL_DELIMITER
+from kedro.io.core import PROTOCOL_DELIMITER, DatasetError
 from s3fs.core import S3FileSystem
 
-from kedro_datasets.plotly import JSONDataSet
+from kedro_datasets.plotly import JSONDataset
 
 
 @pytest.fixture
@@ -19,8 +19,8 @@ def filepath_json(tmp_path):
 
 
 @pytest.fixture
-def json_data_set(filepath_json, load_args, save_args, fs_args):
-    return JSONDataSet(
+def json_dataset(filepath_json, load_args, save_args, fs_args):
+    return JSONDataset(
         filepath=filepath_json,
         load_args=load_args,
         save_args=save_args,
@@ -33,41 +33,41 @@ def dummy_plot():
     return px.scatter(x=[1, 2, 3], y=[1, 3, 2], title="Test")
 
 
-class TestJSONDataSet:
-    def test_save_and_load(self, json_data_set, dummy_plot):
+class TestJSONDataset:
+    def test_save_and_load(self, json_dataset, dummy_plot):
         """Test saving and reloading the data set."""
-        json_data_set.save(dummy_plot)
-        reloaded = json_data_set.load()
+        json_dataset.save(dummy_plot)
+        reloaded = json_dataset.load()
         assert dummy_plot == reloaded
-        assert json_data_set._fs_open_args_load == {}
-        assert json_data_set._fs_open_args_save == {"mode": "w"}
+        assert json_dataset._fs_open_args_load == {}
+        assert json_dataset._fs_open_args_save == {"mode": "w"}
 
-    def test_exists(self, json_data_set, dummy_plot):
+    def test_exists(self, json_dataset, dummy_plot):
         """Test `exists` method invocation for both existing and
         nonexistent data set."""
-        assert not json_data_set.exists()
-        json_data_set.save(dummy_plot)
-        assert json_data_set.exists()
+        assert not json_dataset.exists()
+        json_dataset.save(dummy_plot)
+        assert json_dataset.exists()
 
-    def test_load_missing_file(self, json_data_set):
+    def test_load_missing_file(self, json_dataset):
         """Check the error when trying to load missing file."""
-        pattern = r"Failed while loading data from data set JSONDataSet\(.*\)"
-        with pytest.raises(DataSetError, match=pattern):
-            json_data_set.load()
+        pattern = r"Failed while loading data from data set JSONDataset\(.*\)"
+        with pytest.raises(DatasetError, match=pattern):
+            json_dataset.load()
 
     @pytest.mark.parametrize("save_args", [{"pretty": True}])
-    def test_save_extra_params(self, json_data_set, save_args):
+    def test_save_extra_params(self, json_dataset, save_args):
         """Test overriding default save args"""
         for k, v in save_args.items():
-            assert json_data_set._save_args[k] == v
+            assert json_dataset._save_args[k] == v
 
     @pytest.mark.parametrize(
         "load_args", [{"output_type": "FigureWidget", "skip_invalid": True}]
     )
-    def test_load_extra_params(self, json_data_set, load_args):
+    def test_load_extra_params(self, json_dataset, load_args):
         """Test overriding default save args"""
         for k, v in load_args.items():
-            assert json_data_set._load_args[k] == v
+            assert json_dataset._load_args[k] == v
 
     @pytest.mark.parametrize(
         "filepath,instance_type,credentials",
@@ -85,17 +85,27 @@ class TestJSONDataSet:
         ],
     )
     def test_protocol_usage(self, filepath, instance_type, credentials):
-        data_set = JSONDataSet(filepath=filepath, credentials=credentials)
-        assert isinstance(data_set._fs, instance_type)
+        dataset = JSONDataset(filepath=filepath, credentials=credentials)
+        assert isinstance(dataset._fs, instance_type)
 
         path = filepath.split(PROTOCOL_DELIMITER, 1)[-1]
 
-        assert str(data_set._filepath) == path
-        assert isinstance(data_set._filepath, PurePosixPath)
+        assert str(dataset._filepath) == path
+        assert isinstance(dataset._filepath, PurePosixPath)
 
     def test_catalog_release(self, mocker):
         fs_mock = mocker.patch("fsspec.filesystem").return_value
         filepath = "test.json"
-        data_set = JSONDataSet(filepath=filepath)
-        data_set.release()
+        dataset = JSONDataset(filepath=filepath)
+        dataset.release()
         fs_mock.invalidate_cache.assert_called_once_with(filepath)
+
+    def test_preview(self, json_dataset, dummy_plot):
+        json_dataset.save(dummy_plot)
+        preview = json_dataset.preview()
+        assert (
+            inspect.signature(json_dataset.preview).return_annotation.__name__
+            == "PlotlyPreview"
+        )
+        assert "data" in preview
+        assert "layout" in preview

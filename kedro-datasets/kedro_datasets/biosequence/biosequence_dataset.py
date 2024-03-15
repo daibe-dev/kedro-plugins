@@ -1,58 +1,60 @@
-"""BioSequenceDataSet loads and saves data to/from bio-sequence objects to
+"""BioSequenceDataset loads and saves data to/from bio-sequence objects to
 file.
 """
 from copy import deepcopy
 from pathlib import PurePosixPath
-from typing import Any, Dict, List
+from typing import Any
 
 import fsspec
 from Bio import SeqIO
-from kedro.io.core import get_filepath_str, get_protocol_and_path
-
-from .._io import AbstractDataset as AbstractDataSet
+from kedro.io.core import AbstractDataset, get_filepath_str, get_protocol_and_path
 
 
-class BioSequenceDataSet(AbstractDataSet[List, List]):
-    r"""``BioSequenceDataSet`` loads and saves data to a sequence file.
+class BioSequenceDataset(AbstractDataset[list, list]):
+    r"""``BioSequenceDataset`` loads and saves data to a sequence file.
 
     Example:
-    ::
 
-        >>> from kedro_datasets.biosequence import BioSequenceDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.biosequence import BioSequenceDataset
         >>> from io import StringIO
         >>> from Bio import SeqIO
         >>>
         >>> data = ">Alpha\nACCGGATGTA\n>Beta\nAGGCTCGGTTA\n"
         >>> raw_data = []
         >>> for record in SeqIO.parse(StringIO(data), "fasta"):
-        >>>     raw_data.append(record)
+        ...     raw_data.append(record)
+        ...
         >>>
-        >>> data_set = BioSequenceDataSet(filepath="ls_orchid.fasta",
-        >>>                               load_args={"format": "fasta"},
-        >>>                               save_args={"format": "fasta"})
-        >>> data_set.save(raw_data)
-        >>> sequence_list = data_set.load()
+        >>> dataset = BioSequenceDataset(
+        ...     filepath=tmp_path / "ls_orchid.fasta",
+        ...     load_args={"format": "fasta"},
+        ...     save_args={"format": "fasta"},
+        ... )
+        >>> dataset.save(raw_data)
+        >>> sequence_list = dataset.load()
         >>>
         >>> assert raw_data[0].id == sequence_list[0].id
         >>> assert raw_data[0].seq == sequence_list[0].seq
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
         """
-        Creates a new instance of ``BioSequenceDataSet`` pointing
+        Creates a new instance of ``BioSequenceDataset`` pointing
         to a concrete filepath.
 
         Args:
@@ -107,7 +109,7 @@ class BioSequenceDataSet(AbstractDataSet[List, List]):
 
         self.metadata = metadata
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -115,12 +117,12 @@ class BioSequenceDataSet(AbstractDataSet[List, List]):
             "save_args": self._save_args,
         }
 
-    def _load(self) -> List:
+    def _load(self) -> list:
         load_path = get_filepath_str(self._filepath, self._protocol)
         with self._fs.open(load_path, **self._fs_open_args_load) as fs_file:
             return list(SeqIO.parse(handle=fs_file, **self._load_args))
 
-    def _save(self, data: List) -> None:
+    def _save(self, data: list) -> None:
         save_path = get_filepath_str(self._filepath, self._protocol)
 
         with self._fs.open(save_path, **self._fs_open_args_save) as fs_file:

@@ -1,4 +1,4 @@
-"""``EmailMessageDataSet`` loads/saves an email message from/to a file
+"""``EmailMessageDataset`` loads/saves an email message from/to a file
 using an underlying filesystem (e.g.: local, S3, GCS). It uses the
 ``email`` package in the standard library to manage email messages.
 """
@@ -8,28 +8,32 @@ from email.message import Message
 from email.parser import Parser
 from email.policy import default
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
-from kedro.io.core import Version, get_filepath_str, get_protocol_and_path
+from kedro.io.core import (
+    AbstractVersionedDataset,
+    DatasetError,
+    Version,
+    get_filepath_str,
+    get_protocol_and_path,
+)
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
 
-
-class EmailMessageDataSet(AbstractVersionedDataSet[Message, Message]):
-    """``EmailMessageDataSet`` loads/saves an email message from/to a file
+class EmailMessageDataset(AbstractVersionedDataset[Message, Message]):
+    """``EmailMessageDataset`` loads/saves an email message from/to a file
     using an underlying filesystem (e.g.: local, S3, GCS). It uses the
     ``email`` package in the standard library to manage email messages.
 
-    Note that ``EmailMessageDataSet`` doesn't handle sending email messages.
+    Note that ``EmailMessageDataset`` doesn't handle sending email messages.
 
     Example:
-    ::
+
+    .. code-block:: pycon
 
         >>> from email.message import EmailMessage
         >>>
-        >>> from kedro_datasets.email import EmailMessageDataSet
+        >>> from kedro_datasets.email import EmailMessageDataset
         >>>
         >>> string_to_write = "what would you do if you were invisable for one day????"
         >>>
@@ -40,28 +44,28 @@ class EmailMessageDataSet(AbstractVersionedDataSet[Message, Message]):
         >>> msg["From"] = '"sin studly17"'
         >>> msg["To"] = '"strong bad"'
         >>>
-        >>> data_set = EmailMessageDataSet(filepath="test")
-        >>> data_set.save(msg)
-        >>> reloaded = data_set.load()
+        >>> dataset = EmailMessageDataset(filepath=tmp_path / "test")
+        >>> dataset.save(msg)
+        >>> reloaded = dataset.load()
         >>> assert msg.__dict__ == reloaded.__dict__
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``EmailMessageDataSet`` pointing to a concrete text file
+        """Creates a new instance of ``EmailMessageDataset`` pointing to a concrete text file
         on a specific filesystem.
 
         Args:
@@ -140,7 +144,7 @@ class EmailMessageDataSet(AbstractVersionedDataSet[Message, Message]):
         self._fs_open_args_load = _fs_open_args_load
         self._fs_open_args_save = _fs_open_args_save
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -168,7 +172,7 @@ class EmailMessageDataSet(AbstractVersionedDataSet[Message, Message]):
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)

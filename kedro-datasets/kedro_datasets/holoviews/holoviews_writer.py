@@ -4,47 +4,51 @@ filesystem (e.g. local, S3, GCS)."""
 import io
 from copy import deepcopy
 from pathlib import PurePosixPath
-from typing import Any, Dict, NoReturn, TypeVar
+from typing import Any, NoReturn, TypeVar
 
 import fsspec
 import holoviews as hv
-from kedro.io.core import Version, get_filepath_str, get_protocol_and_path
-
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
+from kedro.io.core import (
+    AbstractVersionedDataset,
+    DatasetError,
+    Version,
+    get_filepath_str,
+    get_protocol_and_path,
+)
 
 # HoloViews to be passed in `hv.save()`
 HoloViews = TypeVar("HoloViews")
 
 
-class HoloviewsWriter(AbstractVersionedDataSet[HoloViews, NoReturn]):
+class HoloviewsWriter(AbstractVersionedDataset[HoloViews, NoReturn]):
     """``HoloviewsWriter`` saves Holoviews objects to image file(s) in an underlying
     filesystem (e.g. local, S3, GCS).
 
     Example:
-    ::
+
+    .. code-block:: pycon
 
         >>> import holoviews as hv
         >>> from kedro_datasets.holoviews import HoloviewsWriter
         >>>
         >>> curve = hv.Curve(range(10))
-        >>> holoviews_writer = HoloviewsWriter("/tmp/holoviews")
+        >>> holoviews_writer = HoloviewsWriter(filepath=tmp_path / "holoviews")
         >>>
         >>> holoviews_writer.save(curve)
 
     """
 
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {"fmt": "png"}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {"fmt": "png"}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        fs_args: Dict[str, Any] = None,
-        credentials: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        metadata: Dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
         """Creates a new instance of ``HoloviewsWriter``.
 
@@ -99,7 +103,7 @@ class HoloviewsWriter(AbstractVersionedDataSet[HoloViews, NoReturn]):
         if save_args is not None:
             self._save_args.update(save_args)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -108,7 +112,7 @@ class HoloviewsWriter(AbstractVersionedDataSet[HoloViews, NoReturn]):
         }
 
     def _load(self) -> NoReturn:
-        raise DataSetError(f"Loading not supported for '{self.__class__.__name__}'")
+        raise DatasetError(f"Loading not supported for '{self.__class__.__name__}'")
 
     def _save(self, data: HoloViews) -> None:
         bytes_buffer = io.BytesIO()

@@ -1,29 +1,28 @@
-"""``ParquetDataSet`` loads/saves data from/to a Parquet file using an underlying
+"""``ParquetDataset`` loads/saves data from/to a Parquet file using an underlying
 filesystem (e.g.: local, S3, GCS). It uses pandas to handle the Parquet file.
 """
 import logging
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
 import pandas as pd
 from kedro.io.core import (
     PROTOCOL_DELIMITER,
+    AbstractVersionedDataset,
+    DatasetError,
     Version,
     get_filepath_str,
     get_protocol_and_path,
 )
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
-
 logger = logging.getLogger(__name__)
 
 
-class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
-    """``ParquetDataSet`` loads/saves data from/to a Parquet file using an underlying
+class ParquetDataset(AbstractVersionedDataset[pd.DataFrame, pd.DataFrame]):
+    """``ParquetDataset`` loads/saves data from/to a Parquet file using an underlying
     filesystem (e.g.: local, S3, GCS). It uses pandas to handle the Parquet file.
 
     Example usage for the
@@ -33,7 +32,7 @@ class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     .. code-block:: yaml
 
         boats:
-          type: pandas.ParquetDataSet
+          type: pandas.ParquetDataset
           filepath: data/01_raw/boats.parquet
           load_args:
             engine: pyarrow
@@ -44,7 +43,7 @@ class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
             engine: pyarrow
 
         trucks:
-          type: pandas.ParquetDataSet
+          type: pandas.ParquetDataset
           filepath: abfs://container/02_intermediate/trucks.parquet
           credentials: dev_abs
           load_args:
@@ -57,36 +56,36 @@ class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pandas import ParquetDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import ParquetDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                      'col3': [5, 6]})
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>>
-        >>> data_set = ParquetDataSet(filepath="test.parquet")
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset = ParquetDataset(filepath=tmp_path / "test.parquet")
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>> assert data.equals(reloaded)
 
     """
 
-    DEFAULT_LOAD_ARGS: Dict[str, Any] = {}
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_LOAD_ARGS: dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``ParquetDataSet`` pointing to a concrete Parquet file
+        """Creates a new instance of ``ParquetDataset`` pointing to a concrete Parquet file
         on a specific filesystem.
 
         Args:
@@ -153,7 +152,7 @@ class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
             self._save_args.pop("storage_options", None)
             self._load_args.pop("storage_options", None)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -180,14 +179,14 @@ class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
         save_path = get_filepath_str(self._get_save_path(), self._protocol)
 
         if Path(save_path).is_dir():
-            raise DataSetError(
+            raise DatasetError(
                 f"Saving {self.__class__.__name__} to a directory is not supported."
             )
 
         if "partition_cols" in self._save_args:
-            raise DataSetError(
+            raise DatasetError(
                 f"{self.__class__.__name__} does not support save argument "
-                f"'partition_cols'. Please use 'kedro.io.PartitionedDataSet' instead."
+                f"'partition_cols'. Please use 'kedro.io.PartitionedDataset' instead."
             )
 
         bytes_buffer = BytesIO()
@@ -201,7 +200,7 @@ class ParquetDataSet(AbstractVersionedDataSet[pd.DataFrame, pd.DataFrame]):
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)

@@ -1,25 +1,24 @@
-"""``AbstractDataSet`` implementation to access Spark dataframes using
+"""``AbstractDataset`` implementation to access Spark dataframes using
 ``pyspark`` on Apache Hive.
 """
 import pickle
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import Any
 
-from pyspark.sql import DataFrame, SparkSession, Window
+from kedro.io.core import AbstractDataset, DatasetError
+from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import col, lit, row_number
 
-from .._io import AbstractDataset as AbstractDataSet
-from .._io import DatasetError as DataSetError
+from kedro_datasets.spark.spark_dataset import _get_spark
 
 
-# pylint:disable=too-many-instance-attributes
-class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
-    """``SparkHiveDataSet`` loads and saves Spark dataframes stored on Hive.
+class SparkHiveDataset(AbstractDataset[DataFrame, DataFrame]):
+    """``SparkHiveDataset`` loads and saves Spark dataframes stored on Hive.
     This data set also handles some incompatible file types such as using partitioned parquet on
     hive which will not normally allow upserts to existing data without a complete replacement
     of the existing file/partition.
 
-    This DataSet has some key assumptions:
+    This Dataset has some key assumptions:
 
     - Schemas do not change during the pipeline run (defined PKs must be present for the
       duration of the pipeline).
@@ -34,7 +33,7 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
     .. code-block:: yaml
 
         hive_dataset:
-          type: spark.SparkHiveDataSet
+          type: spark.SparkHiveDataset
           database: hive_database
           table: table_name
           write_mode: overwrite
@@ -42,42 +41,44 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
+
+    .. code-block:: pycon
 
         >>> from pyspark.sql import SparkSession
-        >>> from pyspark.sql.types import (StructField, StringType,
-        >>>                                IntegerType, StructType)
+        >>> from pyspark.sql.types import StructField, StringType, IntegerType, StructType
         >>>
-        >>> from kedro_datasets.spark import SparkHiveDataSet
+        >>> from kedro_datasets.spark import SparkHiveDataset
         >>>
-        >>> schema = StructType([StructField("name", StringType(), True),
-        >>>                      StructField("age", IntegerType(), True)])
+        >>> schema = StructType(
+        ...     [StructField("name", StringType(), True), StructField("age", IntegerType(), True)]
+        ... )
         >>>
-        >>> data = [('Alex', 31), ('Bob', 12), ('Clarke', 65), ('Dave', 29)]
+        >>> data = [("Alex", 31), ("Bob", 12), ("Clarke", 65), ("Dave", 29)]
         >>>
         >>> spark_df = SparkSession.builder.getOrCreate().createDataFrame(data, schema)
         >>>
-        >>> data_set = SparkHiveDataSet(database="test_database", table="test_table",
-        >>>                             write_mode="overwrite")
-        >>> data_set.save(spark_df)
-        >>> reloaded = data_set.load()
+        >>> dataset = SparkHiveDataset(
+        ...     database="test_database", table="test_table", write_mode="overwrite"
+        ... )
+        >>> dataset.save(spark_df)
+        >>> reloaded = dataset.load()
         >>>
         >>> reloaded.take(4)
     """
 
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint:disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         database: str,
         table: str,
         write_mode: str = "errorifexists",
-        table_pk: List[str] = None,
-        save_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        table_pk: list[str] = None,
+        save_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``SparkHiveDataSet``.
+        """Creates a new instance of ``SparkHiveDataset``.
 
         Args:
             database: The name of the hive database.
@@ -101,17 +102,17 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
             or directly in the Spark conf folder.
 
         Raises:
-            DataSetError: Invalid configuration supplied
+            DatasetError: Invalid configuration supplied
         """
         _write_modes = ["append", "error", "errorifexists", "upsert", "overwrite"]
         if write_mode not in _write_modes:
             valid_modes = ", ".join(_write_modes)
-            raise DataSetError(
+            raise DatasetError(
                 f"Invalid 'write_mode' provided: {write_mode}. "
                 f"'write_mode' must be one of: {valid_modes}"
             )
         if write_mode == "upsert" and not table_pk:
-            raise DataSetError("'table_pk' must be set to utilise 'upsert' read mode")
+            raise DatasetError("'table_pk' must be set to utilise 'upsert' read mode")
 
         self._write_mode = write_mode
         self._table_pk = table_pk or []
@@ -126,7 +127,7 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
 
         self.metadata = metadata
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "database": self._database,
             "table": self._table,
@@ -135,20 +136,6 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
             "partition_by": self._save_args.get("partitionBy"),
             "format": self._format,
         }
-
-    @staticmethod
-    def _get_spark() -> SparkSession:
-        """
-        This method should only be used to get an existing SparkSession
-        with valid Hive configuration.
-        Configuration for Hive is read from hive-site.xml on the classpath.
-        It supports running both SQL and HiveQL commands.
-        Additionally, if users are leveraging the `upsert` functionality,
-        then a `checkpoint` directory must be set, e.g. using
-        `spark.sparkContext.setCheckpointDir("/path/to/dir")`
-        """
-        _spark = SparkSession.builder.getOrCreate()
-        return _spark
 
     def _create_hive_table(self, data: DataFrame, mode: str = None):
         _mode: str = mode or self._write_mode
@@ -160,14 +147,14 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
         )
 
     def _load(self) -> DataFrame:
-        return self._get_spark().read.table(self._full_table_address)
+        return _get_spark().read.table(self._full_table_address)
 
     def _save(self, data: DataFrame) -> None:
         self._validate_save(data)
         if self._write_mode == "upsert":
             # check if _table_pk is a subset of df columns
             if not set(self._table_pk) <= set(self._load().columns):
-                raise DataSetError(
+                raise DatasetError(
                     f"Columns {str(self._table_pk)} selected as primary key(s) not found in "
                     f"table {self._full_table_address}"
                 )
@@ -204,16 +191,15 @@ class SparkHiveDataSet(AbstractDataSet[DataFrame, DataFrame]):
         if data_dtypes != hive_dtypes:
             new_cols = data_dtypes - hive_dtypes
             missing_cols = hive_dtypes - data_dtypes
-            raise DataSetError(
+            raise DatasetError(
                 f"Dataset does not match hive table schema.\n"
                 f"Present on insert only: {sorted(new_cols)}\n"
                 f"Present on schema only: {sorted(missing_cols)}"
             )
 
     def _exists(self) -> bool:
-        # noqa # pylint:disable=protected-access
         return (
-            self._get_spark()
+            _get_spark()
             ._jsparkSession.catalog()
             .tableExists(self._database, self._table)
         )

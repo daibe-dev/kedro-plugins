@@ -1,48 +1,58 @@
-"""``ImageDataSet`` loads/saves image data as `numpy` from an underlying
+"""``ImageDataset`` loads/saves image data as `numpy` from an underlying
 filesystem (e.g.: local, S3, GCS). It uses Pillow to handle image file.
 """
 from copy import deepcopy
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
-from kedro.io.core import Version, get_filepath_str, get_protocol_and_path
+from kedro.io.core import (
+    AbstractVersionedDataset,
+    DatasetError,
+    Version,
+    get_filepath_str,
+    get_protocol_and_path,
+)
 from PIL import Image
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
 
-
-class ImageDataSet(AbstractVersionedDataSet[Image.Image, Image.Image]):
-    """``ImageDataSet`` loads/saves image data as `numpy` from an underlying
+class ImageDataset(AbstractVersionedDataset[Image.Image, Image.Image]):
+    """``ImageDataset`` loads/saves image data as `numpy` from an underlying
     filesystem (e.g.: local, S3, GCS). It uses Pillow to handle image file.
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pillow import ImageDataSet
+    .. code-block:: pycon
+
+        >>> import sys
         >>>
-        >>> data_set = ImageDataSet(filepath="test.png")
-        >>> image = data_set.load()
+        >>> import pytest
+        >>> from kedro_datasets.pillow import ImageDataset
+        >>>
+        >>> if sys.platform.startswith("win"):
+        ...     pytest.skip("this doctest hangs on Windows CI runner")
+        ...
+        >>> dataset = ImageDataset(filepath="https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg")
+        >>> image = dataset.load()
         >>> image.show()
 
     """
 
-    DEFAULT_SAVE_ARGS: Dict[str, Any] = {}
+    DEFAULT_SAVE_ARGS: dict[str, Any] = {}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
-        save_args: Dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``ImageDataSet`` pointing to a concrete image file
+        """Creates a new instance of ``ImageDataset`` pointing to a concrete image file
         on a specific filesystem.
 
         Args:
@@ -101,7 +111,7 @@ class ImageDataSet(AbstractVersionedDataSet[Image.Image, Image.Image]):
         self._fs_open_args_load = _fs_open_args_load
         self._fs_open_args_save = _fs_open_args_save
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -135,7 +145,7 @@ class ImageDataSet(AbstractVersionedDataSet[Image.Image, Image.Image]):
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)

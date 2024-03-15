@@ -1,34 +1,35 @@
-"""``ExcelDataSet`` loads/saves data from/to a Excel file using an underlying
+"""``ExcelDataset`` loads/saves data from/to a Excel file using an underlying
 filesystem (e.g.: local, S3, GCS). It uses pandas to handle the Excel file.
 """
 import logging
 from copy import deepcopy
 from io import BytesIO
 from pathlib import PurePosixPath
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 import fsspec
 import pandas as pd
 from kedro.io.core import (
     PROTOCOL_DELIMITER,
+    AbstractVersionedDataset,
+    DatasetError,
     Version,
     get_filepath_str,
     get_protocol_and_path,
 )
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
+from kedro_datasets._typing import TablePreview
 
 logger = logging.getLogger(__name__)
 
 
-class ExcelDataSet(
-    AbstractVersionedDataSet[
-        Union[pd.DataFrame, Dict[str, pd.DataFrame]],
-        Union[pd.DataFrame, Dict[str, pd.DataFrame]],
+class ExcelDataset(
+    AbstractVersionedDataset[
+        Union[pd.DataFrame, dict[str, pd.DataFrame]],
+        Union[pd.DataFrame, dict[str, pd.DataFrame]],
     ]
 ):
-    """``ExcelDataSet`` loads/saves data from/to a Excel file using an underlying
+    """``ExcelDataset`` loads/saves data from/to a Excel file using an underlying
     filesystem (e.g.: local, S3, GCS). It uses pandas to handle the Excel file.
 
     Example usage for the
@@ -38,7 +39,7 @@ class ExcelDataSet(
     .. code-block:: yaml
 
         rockets:
-          type: pandas.ExcelDataSet
+          type: pandas.ExcelDataset
           filepath: gcs://your_bucket/rockets.xlsx
           fs_args:
             project: my-project
@@ -49,23 +50,23 @@ class ExcelDataSet(
             sheet_name: Sheet1
 
         shuttles:
-          type: pandas.ExcelDataSet
+          type: pandas.ExcelDataset
           filepath: data/01_raw/shuttles.xlsx
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.pandas import ExcelDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import ExcelDataset
         >>> import pandas as pd
         >>>
-        >>> data = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                      'col3': [5, 6]})
+        >>> data = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>>
-        >>> data_set = ExcelDataSet(filepath="test.xlsx")
-        >>> data_set.save(data)
-        >>> reloaded = data_set.load()
+        >>> dataset = ExcelDataset(filepath=tmp_path / "test.xlsx")
+        >>> dataset.save(data)
+        >>> reloaded = dataset.load()
         >>> assert data.equals(reloaded)
 
     To save a multi-sheet Excel file, no special ``save_args`` are required.
@@ -80,7 +81,7 @@ class ExcelDataSet(
     .. code-block:: yaml
 
         trains:
-          type: pandas.ExcelDataSet
+          type: pandas.ExcelDataset
           filepath: data/02_intermediate/company/trains.xlsx
           load_args:
             sheet_name: [Sheet1, Sheet2, Sheet3]
@@ -89,18 +90,18 @@ class ExcelDataSet(
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_
     for a multi-sheet Excel file:
-    ::
 
-        >>> from kedro_datasets.pandas import ExcelDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.pandas import ExcelDataset
         >>> import pandas as pd
         >>>
-        >>> dataframe = pd.DataFrame({'col1': [1, 2], 'col2': [4, 5],
-        >>>                      'col3': [5, 6]})
+        >>> dataframe = pd.DataFrame({"col1": [1, 2], "col2": [4, 5], "col3": [5, 6]})
         >>> another_dataframe = pd.DataFrame({"x": [10, 20], "y": ["hello", "world"]})
         >>> multiframe = {"Sheet1": dataframe, "Sheet2": another_dataframe}
-        >>> data_set = ExcelDataSet(filepath="test.xlsx", load_args = {"sheet_name": None})
-        >>> data_set.save(multiframe)
-        >>> reloaded = data_set.load()
+        >>> dataset = ExcelDataset(filepath="test.xlsx", load_args={"sheet_name": None})
+        >>> dataset.save(multiframe)
+        >>> reloaded = dataset.load()
         >>> assert multiframe["Sheet1"].equals(reloaded["Sheet1"])
         >>> assert multiframe["Sheet2"].equals(reloaded["Sheet2"])
 
@@ -109,19 +110,19 @@ class ExcelDataSet(
     DEFAULT_LOAD_ARGS = {"engine": "openpyxl"}
     DEFAULT_SAVE_ARGS = {"index": False}
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
         engine: str = "openpyxl",
-        load_args: Dict[str, Any] = None,
-        save_args: Dict[str, Any] = None,
+        load_args: dict[str, Any] = None,
+        save_args: dict[str, Any] = None,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``ExcelDataSet`` pointing to a concrete Excel file
+        """Creates a new instance of ``ExcelDataset`` pointing to a concrete Excel file
         on a specific filesystem.
 
         Args:
@@ -156,7 +157,7 @@ class ExcelDataSet(
                 This is ignored by Kedro, but may be consumed by users or external plugins.
 
         Raises:
-            DataSetError: If versioning is enabled while in append mode.
+            DatasetError: If versioning is enabled while in append mode.
         """
         _fs_args = deepcopy(fs_args) or {}
         _credentials = deepcopy(credentials) or {}
@@ -191,8 +192,8 @@ class ExcelDataSet(
         self._writer_args.setdefault("engine", engine or "openpyxl")  # type: ignore
 
         if version and self._writer_args.get("mode") == "a":  # type: ignore
-            raise DataSetError(
-                "'ExcelDataSet' doesn't support versioning in append mode."
+            raise DatasetError(
+                "'ExcelDataset' doesn't support versioning in append mode."
             )
 
         if "storage_options" in self._save_args or "storage_options" in self._load_args:
@@ -204,7 +205,7 @@ class ExcelDataSet(
             self._save_args.pop("storage_options", None)
             self._load_args.pop("storage_options", None)
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -214,7 +215,7 @@ class ExcelDataSet(
             "version": self._version,
         }
 
-    def _load(self) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
+    def _load(self) -> Union[pd.DataFrame, dict[str, pd.DataFrame]]:
         load_path = str(self._get_load_path())
         if self._protocol == "file":
             # file:// protocol seems to misbehave on Windows
@@ -228,11 +229,10 @@ class ExcelDataSet(
             load_path, storage_options=self._storage_options, **self._load_args
         )
 
-    def _save(self, data: Union[pd.DataFrame, Dict[str, pd.DataFrame]]) -> None:
+    def _save(self, data: Union[pd.DataFrame, dict[str, pd.DataFrame]]) -> None:
         output = BytesIO()
         save_path = get_filepath_str(self._get_save_path(), self._protocol)
 
-        # pylint: disable=abstract-class-instantiated
         with pd.ExcelWriter(output, **self._writer_args) as writer:
             if isinstance(data, dict):
                 for sheet_name, sheet_data in data.items():
@@ -250,7 +250,7 @@ class ExcelDataSet(
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)
@@ -264,10 +264,19 @@ class ExcelDataSet(
         filepath = get_filepath_str(self._filepath, self._protocol)
         self._fs.invalidate_cache(filepath)
 
-    def _preview(self, nrows: int = 40) -> Dict:
+    def preview(self, nrows: int = 5) -> TablePreview:
+        """
+        Generate a preview of the dataset with a specified number of rows.
+
+        Args:
+            nrows: The number of rows to include in the preview. Defaults to 5.
+
+        Returns:
+            dict: A dictionary containing the data in a split format.
+        """
         # Create a copy so it doesn't contaminate the original dataset
         dataset_copy = self._copy()
-        dataset_copy._load_args["nrows"] = nrows  # pylint: disable=protected-access
+        dataset_copy._load_args["nrows"] = nrows
         data = dataset_copy.load()
 
         return data.to_dict(orient="split")

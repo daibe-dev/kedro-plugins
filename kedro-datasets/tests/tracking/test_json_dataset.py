@@ -1,14 +1,14 @@
+import inspect
 import json
 from pathlib import Path, PurePosixPath
 
 import pytest
 from fsspec.implementations.local import LocalFileSystem
 from gcsfs import GCSFileSystem
-from kedro.io import DataSetError
-from kedro.io.core import PROTOCOL_DELIMITER, Version
+from kedro.io.core import PROTOCOL_DELIMITER, DatasetError, Version
 from s3fs.core import S3FileSystem
 
-from kedro_datasets.tracking import JSONDataSet
+from kedro_datasets.tracking import JSONDataset
 
 
 @pytest.fixture
@@ -18,12 +18,12 @@ def filepath_json(tmp_path):
 
 @pytest.fixture
 def json_dataset(filepath_json, save_args, fs_args):
-    return JSONDataSet(filepath=filepath_json, save_args=save_args, fs_args=fs_args)
+    return JSONDataset(filepath=filepath_json, save_args=save_args, fs_args=fs_args)
 
 
 @pytest.fixture
 def explicit_versioned_json_dataset(filepath_json, load_version, save_version):
-    return JSONDataSet(
+    return JSONDataset(
         filepath=filepath_json, version=Version(load_version, save_version)
     )
 
@@ -33,10 +33,10 @@ def dummy_data():
     return {"col1": 1, "col2": 2, "col3": "mystring"}
 
 
-class TestJSONDataSet:
+class TestJSONDataset:
     def test_save(self, filepath_json, dummy_data, tmp_path, save_version):
         """Test saving and reloading the data set."""
-        json_dataset = JSONDataSet(
+        json_dataset = JSONDataset(
             filepath=filepath_json, version=Version(None, save_version)
         )
         json_dataset.save(dummy_data)
@@ -62,8 +62,8 @@ class TestJSONDataSet:
 
     def test_load_fail(self, json_dataset, dummy_data):
         json_dataset.save(dummy_data)
-        pattern = r"Loading not supported for 'JSONDataSet'"
-        with pytest.raises(DataSetError, match=pattern):
+        pattern = r"Loading not supported for 'JSONDataset'"
+        with pytest.raises(DatasetError, match=pattern):
             json_dataset.load()
 
     def test_exists(self, json_dataset, dummy_data):
@@ -100,29 +100,29 @@ class TestJSONDataSet:
         ],
     )
     def test_protocol_usage(self, filepath, instance_type):
-        data_set = JSONDataSet(filepath=filepath)
-        assert isinstance(data_set._fs, instance_type)
+        dataset = JSONDataset(filepath=filepath)
+        assert isinstance(dataset._fs, instance_type)
 
         path = filepath.split(PROTOCOL_DELIMITER, 1)[-1]
 
-        assert str(data_set._filepath) == path
-        assert isinstance(data_set._filepath, PurePosixPath)
+        assert str(dataset._filepath) == path
+        assert isinstance(dataset._filepath, PurePosixPath)
 
     def test_catalog_release(self, mocker):
         fs_mock = mocker.patch("fsspec.filesystem").return_value
         filepath = "test.json"
-        data_set = JSONDataSet(filepath=filepath)
-        data_set.release()
+        dataset = JSONDataset(filepath=filepath)
+        dataset.release()
         fs_mock.invalidate_cache.assert_called_once_with(filepath)
 
     def test_not_version_str_repr(self):
         """Test that version is not in string representation of the class instance."""
         filepath = "test.json"
-        ds = JSONDataSet(filepath=filepath)
+        ds = JSONDataset(filepath=filepath)
 
         assert filepath in str(ds)
         assert "version" not in str(ds)
-        assert "JSONDataSet" in str(ds)
+        assert "JSONDataset" in str(ds)
         assert "protocol" in str(ds)
         # Default save_args
         assert "save_args={'indent': 2}" in str(ds)
@@ -130,14 +130,14 @@ class TestJSONDataSet:
     def test_version_str_repr(self, load_version, save_version):
         """Test that version is in string representation of the class instance."""
         filepath = "test.json"
-        ds_versioned = JSONDataSet(
+        ds_versioned = JSONDataset(
             filepath=filepath, version=Version(load_version, save_version)
         )
 
         assert filepath in str(ds_versioned)
         ver_str = f"version=Version(load={load_version}, save='{save_version}')"
         assert ver_str in str(ds_versioned)
-        assert "JSONDataSet" in str(ds_versioned)
+        assert "JSONDataset" in str(ds_versioned)
         assert "protocol" in str(ds_versioned)
         # Default save_args
         assert "save_args={'indent': 2}" in str(ds_versioned)
@@ -147,10 +147,10 @@ class TestJSONDataSet:
         corresponding json file for a given save version already exists."""
         explicit_versioned_json_dataset.save(dummy_data)
         pattern = (
-            r"Save path \'.+\' for JSONDataSet\(.+\) must "
+            r"Save path \'.+\' for JSONDataset\(.+\) must "
             r"not exist if versioning is enabled\."
         )
-        with pytest.raises(DataSetError, match=pattern):
+        with pytest.raises(DatasetError, match=pattern):
             explicit_versioned_json_dataset.save(dummy_data)
 
     @pytest.mark.parametrize(
@@ -171,7 +171,7 @@ class TestJSONDataSet:
         pattern = (
             f"Save version '{save_version}' did not match "
             f"load version '{load_version}' for "
-            r"JSONDataSet\(.+\)"
+            r"JSONDataset\(.+\)"
         )
         with pytest.warns(UserWarning, match=pattern):
             explicit_versioned_json_dataset.save(dummy_data)
@@ -179,7 +179,17 @@ class TestJSONDataSet:
     def test_http_filesystem_no_versioning(self):
         pattern = "Versioning is not supported for HTTP protocols."
 
-        with pytest.raises(DataSetError, match=pattern):
-            JSONDataSet(
+        with pytest.raises(DatasetError, match=pattern):
+            JSONDataset(
                 filepath="https://example.com/file.json", version=Version(None, None)
             )
+
+    def test_preview(self, json_dataset, dummy_data):
+        expected_preview = {"col1": 1, "col2": 2, "col3": "mystring"}
+        json_dataset.save(dummy_data)
+        preview = json_dataset.preview()
+        assert preview == expected_preview
+        assert (
+            inspect.signature(json_dataset.preview).return_annotation.__name__
+            == "JSONTrackingPreview"
+        )

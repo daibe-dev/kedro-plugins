@@ -1,19 +1,22 @@
-"""``TextDataSet`` loads/saves data from/to a text file using an underlying
+"""``TextDataset`` loads/saves data from/to a text file using an underlying
 filesystem (e.g.: local, S3, GCS).
 """
 from copy import deepcopy
 from pathlib import PurePosixPath
-from typing import Any, Dict
+from typing import Any
 
 import fsspec
-from kedro.io.core import Version, get_filepath_str, get_protocol_and_path
+from kedro.io.core import (
+    AbstractVersionedDataset,
+    DatasetError,
+    Version,
+    get_filepath_str,
+    get_protocol_and_path,
+)
 
-from .._io import AbstractVersionedDataset as AbstractVersionedDataSet
-from .._io import DatasetError as DataSetError
 
-
-class TextDataSet(AbstractVersionedDataSet[str, str]):
-    """``TextDataSet`` loads/saves data from/to a text file using an underlying
+class TextDataset(AbstractVersionedDataset[str, str]):
+    """``TextDataset`` loads/saves data from/to a text file using an underlying
     filesystem (e.g.: local, S3, GCS)
 
     Example usage for the
@@ -23,35 +26,36 @@ class TextDataSet(AbstractVersionedDataSet[str, str]):
     .. code-block:: yaml
 
         alice_book:
-          type: text.TextDataSet
+          type: text.TextDataset
           filepath: data/01_raw/alice.txt
 
     Example usage for the
     `Python API <https://kedro.readthedocs.io/en/stable/data/\
     advanced_data_catalog_usage.html>`_:
-    ::
 
-        >>> from kedro_datasets.text import TextDataSet
+    .. code-block:: pycon
+
+        >>> from kedro_datasets.text import TextDataset
         >>>
         >>> string_to_write = "This will go in a file."
         >>>
-        >>> data_set = TextDataSet(filepath="test.md")
-        >>> data_set.save(string_to_write)
-        >>> reloaded = data_set.load()
+        >>> dataset = TextDataset(filepath=tmp_path / "test.md")
+        >>> dataset.save(string_to_write)
+        >>> reloaded = dataset.load()
         >>> assert string_to_write == reloaded
 
     """
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
+        *,
         filepath: str,
         version: Version = None,
-        credentials: Dict[str, Any] = None,
-        fs_args: Dict[str, Any] = None,
-        metadata: Dict[str, Any] = None,
+        credentials: dict[str, Any] = None,
+        fs_args: dict[str, Any] = None,
+        metadata: dict[str, Any] = None,
     ) -> None:
-        """Creates a new instance of ``TextDataSet`` pointing to a concrete text file
+        """Creates a new instance of ``TextDataset`` pointing to a concrete text file
         on a specific filesystem.
 
         Args:
@@ -102,7 +106,7 @@ class TextDataSet(AbstractVersionedDataSet[str, str]):
         self._fs_open_args_load = _fs_open_args_load
         self._fs_open_args_save = _fs_open_args_save
 
-    def _describe(self) -> Dict[str, Any]:
+    def _describe(self) -> dict[str, Any]:
         return {
             "filepath": self._filepath,
             "protocol": self._protocol,
@@ -126,7 +130,7 @@ class TextDataSet(AbstractVersionedDataSet[str, str]):
     def _exists(self) -> bool:
         try:
             load_path = get_filepath_str(self._get_load_path(), self._protocol)
-        except DataSetError:
+        except DatasetError:
             return False
 
         return self._fs.exists(load_path)
