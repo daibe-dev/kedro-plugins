@@ -26,6 +26,7 @@ plotly-base = ["plotly>=4.8.0, <6.0"]
 delta-base = ["delta-spark~=1.2.1",]
 neo4j-base = ["neo4j>=5.0.0"]
 networkx-base = ["networkx~=2.4"]
+influxdb-base = ["influxdb-client>=1.9.0, <2.0"]
 
 # Individual Datasets
 api-apidataset = ["requests~=2.20"]
@@ -49,6 +50,8 @@ holoviews = ["kedro-datasets[holoviews-holoviewswriter]"]
 huggingface-hfdataset = ["datasets", "huggingface_hub"]
 huggingface-hftransformerpipelinedataset = ["transformers"]
 huggingface = ["kedro-datasets[huggingface-hfdataset,huggingface-hftransformerpipelinedataset]"]
+
+influxdb = ["kedro-datasets[pandas,influxdb-base]"]
 
 json-jsondataset = []
 json = ["kedro-datasets[json-jsondataset]"]
