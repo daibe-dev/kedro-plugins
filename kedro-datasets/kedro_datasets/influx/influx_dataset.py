@@ -13,7 +13,7 @@ from influxdb_client import InfluxDBClient
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
 
-from .._io import AbstractDataset, DatasetError
+from kedro.io import AbstractDataset, DatasetError
 
 __all__ = ["InfluxQueryDataset"]
 

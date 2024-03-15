@@ -1,5 +1,4 @@
-"""``Neo4jQueryDataSet`` loads data from a provided Cypher query.
-"""
+"""``Neo4jQueryDataSet`` loads data from a provided Cypher query."""
 
 import copy
 import hashlib
@@ -10,7 +9,7 @@ from typing import Any, Dict
 import pandas as pd
 from neo4j import GraphDatabase, Driver
 
-from .._io import AbstractDataset, DatasetError
+from kedro.io import AbstractDataset, DatasetError
 
 __all__ = ["Neo4jCypherDataset"]
 
