@@ -24,6 +24,7 @@ s3fs-base = ["s3fs>=2021.4, <2024.1",]  # Upper bound set arbitrarily, to be rea
 polars-base = ["polars>=0.18.0",]
 plotly-base = ["plotly>=4.8.0, <6.0"]
 delta-base = ["delta-spark~=1.2.1",]
+neo4j-base = ["neo4j>=5.0.0"]
 networkx-base = ["networkx~=2.4"]
 
 # Individual Datasets
@@ -57,6 +58,8 @@ matlab = ["kedro-datasets[matlab-matlabdataset]"]
 
 matplotlib-matplotlibwriter = ["matplotlib>=3.0.3, <4.0"]
 matplotlib = ["kedro-datasets[matplotlib-matplotlibwriter]"]
+
+neo4j = ["kedro-datasets[pandas,neo4j-base]"]
 
 netcdf-netcdfdataset = ["h5netcdf>=1.2.0","netcdf4>=1.6.4","xarray>=2023.1.0"]
 netcdf = ["kedro-datasets[netcdf-netcdfdataset]"]
