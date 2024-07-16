@@ -25,6 +25,7 @@ polars-base = ["polars>=0.18.0",]
 plotly-base = ["plotly>=4.8.0, <6.0"]
 delta-base = ["delta-spark~=1.2.1",]
 neo4j-base = ["neo4j>=5.0.0"]
+odata-base = ["pyodata", "requests"]
 networkx-base = ["networkx~=2.4"]
 influxdb-base = ["influxdb-client>=1.9.0, <2.0"]
 
@@ -71,6 +72,8 @@ networkx-gmldataset = ["kedro-datasets[networkx-base]"]
 networkx-graphmldataset = ["kedro-datasets[networkx-base]"]
 networkx-jsondataset = ["kedro-datasets[networkx-base]"]
 networkx = ["kedro-datasets[networkx-base]"]
+
+odata = ["kedro-datasets[pandas,odata-base]"]
 
 pandas-csvdataset = ["kedro-datasets[pandas-base]"]
 pandas-deltatabledataset = ["kedro-datasets[pandas-base]", "deltalake>=0.10.0"]
