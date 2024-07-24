@@ -136,7 +136,7 @@ spark = ["kedro-datasets[spark-deltatabledataset]"]
 svmlight-svmlightdataset = ["scikit-learn>=1.0.2", "scipy~=1.7.3"]
 svmlight = ["kedro-datasets[svmlight-svmlightdataset]"]
 
-tebis = ["kedro-datasets[pandas,tebis]"]
+tebis = ["kedro-datasets[pandas,tebis-base]"]
 
 tensorflow-tensorflowmodeldataset = ["tensorflow~=2.0; platform_system != 'Darwin' or platform_machine != 'arm64'", "tensorflow-macos~=2.0; platform_system == 'Darwin' and platform_machine == 'arm64'",]
 tensorflow = ["kedro-datasets[tensorflow-tensorflowmodeldataset]"]
@@ -219,6 +219,7 @@ test = [
     "pyproj~=3.0",
     "pyspark>=2.2, <3.4; python_version < '3.11'",
     "pyspark>=3.4; python_version >= '3.11'",
+    "pytebis",
     "pytest-cov~=3.0",
     "pytest-mock>=1.7.1, <2.0",
     "pytest-xdist[psutil]~=2.2.1",
@@ -235,7 +236,6 @@ test = [
     "SQLAlchemy~=1.2",
     "tables~=3.8.0; platform_system == 'Windows'",  # Import issues with python 3.8 with pytables pinning to 3.8.0 fixes this https://github.com/PyTables/PyTables/issues/933#issuecomment-1555917593
     "tables~=3.6; platform_system != 'Windows'",
-    "tebis",
     "tensorflow-macos~=2.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "tensorflow~=2.0; platform_system != 'Darwin' or platform_machine != 'arm64'",
     "triad>=0.6.7, <1.0",
