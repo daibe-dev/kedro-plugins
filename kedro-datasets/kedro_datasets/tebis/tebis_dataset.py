@@ -23,13 +23,13 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
     .. code-block:: yaml
 
         tebis_dataset:
-          type: odata.TebisDataset
+          type: tebis.TebisDataset
           credentials: api_credentials
           measurments:
             - sensor1
             - sensor2
-          start_timestamp: 2024-07-01 00:00:00
-          stop_timestamp: 2024-07-01 23:59:59
+          start_timestamp: 2024-07-01 00:00:00.000
+          stop_timestamp: 2024-07-01 23:59:59.000
           rate: 1
 
     Sample database credentials entry in ``credentials.yml``:
