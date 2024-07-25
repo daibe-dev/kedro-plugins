@@ -25,7 +25,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
         tebis_dataset:
           type: tebis.TebisDataset
           credentials: api_credentials
-          measurments:
+          measurements:
             - sensor1
             - sensor2
           start_timestamp: 2024-07-01 00:00:00.000
@@ -44,7 +44,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
     def __init__(
         self,
         credentials: dict[str, str],
-        measurments: list[Union[int, str]],
+        measurements: list[Union[int, str]],
         start_timestamp: str,
         stop_timestamp: str,
         rate: float,
@@ -54,7 +54,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
 
         config = {"host": credentials["url"], "configfile": credentials["config_path"]}
         self._connection = tebis.Tebis(configuration=config)
-        self._measurments = measurments
+        self._measurement = measurements
         self._start_dt = start_timestamp
         self._stop_dt = stop_timestamp
         self._rate = rate
@@ -62,7 +62,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
     def _load(self) -> pd.DataFrame:
         try:
             output = self._connection.getDataAsPD(
-                names=self._measurments,
+                names=self._measurements,
                 start=self._start_dt,
                 end=self._stop_dt,
                 rate=self._rate,
