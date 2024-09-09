@@ -48,6 +48,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
         start_timestamp: str,
         stop_timestamp: str,
         rate: float,
+        metadata: dict[str, Any] = None
     ):
         if "url" not in credentials and "config_path" not in credentials:
             raise DatasetError("Credentials must contain an url and config_path.")
@@ -58,6 +59,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
         self._start_dt = start_timestamp
         self._stop_dt = stop_timestamp
         self._rate = rate
+        self.metadata = metadata
 
     def _load(self) -> pd.DataFrame:
         try:
