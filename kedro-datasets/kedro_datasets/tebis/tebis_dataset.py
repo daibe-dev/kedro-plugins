@@ -55,7 +55,7 @@ class TebisDataset(AbstractDataset[pd.DataFrame, pd.DataFrame]):
 
         config = {"host": credentials["url"], "configfile": credentials["config_path"]}
         self._connection = tebis.Tebis(configuration=config)
-        self._measurement = measurements
+        self._measurements = measurements
         self._start_dt = start_timestamp
         self._stop_dt = stop_timestamp
         self._rate = rate
